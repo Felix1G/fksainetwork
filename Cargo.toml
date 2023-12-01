@@ -1,0 +1,15 @@
+[package]
+name = "fksainetwork"
+version = "0.1.0"
+edition = "2021"
+
+exclude = [
+    "networks"
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8.5"
+bincode = "2.0.0-rc.3"
+bincode_derive = "2.0.0-rc.3"
