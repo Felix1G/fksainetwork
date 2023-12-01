@@ -1,7 +1,7 @@
 [package]
 name = "fksainetwork"
 description = "A simple neural network."
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Felix Kanardy Sujono"]
 repository = "https://github.com/Felix1G/fksainetwork"
