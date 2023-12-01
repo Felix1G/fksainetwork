@@ -239,7 +239,7 @@ mod alphanum_3x5_test {
 
         let len = TEST_ARR.len();
         //learning
-        /*for run in 0..10000000 {
+        for run in 0..10000000 {
             let data = &TEST_ARR[rng.gen_range(0..len)];
             let array = &data.1;
             let expected = &expected(data.0);
@@ -247,10 +247,10 @@ mod alphanum_3x5_test {
             let output = network.calculate(array);
             network.learn_bpg_mse(0.001, &expected);
 
-            println!("Run: {run}");
             //println!("Output for {}: {:?}", data.0, network.calculate(array));
 
             if run % 10000 == 0 {
+                println!("Run: {run}");
                 save_network(String::from(PATH), &network);
             }
         }
@@ -261,7 +261,7 @@ mod alphanum_3x5_test {
             let array = data.1;
             let output_arr = network.calculate(&array);
             println!("{} ? {:?}", data.0, from_calculation(&output_arr));
-        }*/
+        }
 
         let output = &network.calculate(&[
             1.0, 1.0, 1.0,
