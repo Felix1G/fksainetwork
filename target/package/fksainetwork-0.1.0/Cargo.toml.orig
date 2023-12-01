@@ -8,7 +8,9 @@ repository = "https://github.com/Felix1G/fksainetwork"
 license = "MIT"
 
 exclude = [
-    "networks"
+    "networks",
+    "target",
+    ".idea"
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

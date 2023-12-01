@@ -14,7 +14,11 @@ edition = "2021"
 name = "fksainetwork"
 version = "0.1.0"
 authors = ["Felix Kanardy Sujono"]
-exclude = ["networks"]
+exclude = [
+    "networks",
+    "target",
+    ".idea",
+]
 description = "A simple neural network."
 readme = "README.md"
 license = "MIT"
