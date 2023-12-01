@@ -1,0 +1,8 @@
+C:\Users\ACER\OneDrive\Documents\GitHub\fksainetwork\target\package\fksainetwork-0.1.0\target\debug\deps\bincode_derive-8d6041fb7698958d.dll: C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\lib.rs C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\attribute.rs C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\derive_enum.rs C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\derive_struct.rs
+
+C:\Users\ACER\OneDrive\Documents\GitHub\fksainetwork\target\package\fksainetwork-0.1.0\target\debug\deps\bincode_derive-8d6041fb7698958d.d: C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\lib.rs C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\attribute.rs C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\derive_enum.rs C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\derive_struct.rs
+
+C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\lib.rs:
+C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\attribute.rs:
+C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\derive_enum.rs:
+C:\Users\ACER\.cargo\registry\src\index.crates.io-6f17d22bba15001f\bincode_derive-2.0.0-rc.3\src\derive_struct.rs:
