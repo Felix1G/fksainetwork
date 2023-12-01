@@ -178,7 +178,7 @@ pub mod network {
 
         /**
         BPG learning using the MSE function.
-        
+
         Provide the expected values that would be returned by the calculate function.
          */
         pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {

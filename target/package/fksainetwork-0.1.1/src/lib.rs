@@ -114,6 +114,11 @@ pub mod network {
             }
         }
 
+        /**
+        Calculates the output given the input.
+
+        Returns: output.
+        */
         pub fn calculate(&mut self, input: &[f32]) -> Vec<f32> {
             //set index layer to the inputs
             let input_layer = &mut (self.layers[0]);
@@ -171,6 +176,11 @@ pub mod network {
             }
         }
 
+        /**
+        BPG learning using the MSE function.
+        
+        Provide the expected values that would be returned by the calculate function.
+         */
         pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {
             let mut output_err_terms = Vec::<f32>::new();
 
