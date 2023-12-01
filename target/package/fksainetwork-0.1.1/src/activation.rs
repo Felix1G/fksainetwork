@@ -1,6 +1,6 @@
 use crate::util;
 
-pub trait Activation {
+trait Activation {
     fn activate(&self, _value: f32) -> f32 { 0.0 }
     fn derivative(&self, _value: f32) -> f32 { 0.0 }
 }
@@ -11,12 +11,25 @@ struct SigmoidActivation;
 
 struct ReLUActivation;
 
-pub fn activations(index: usize) -> Box<dyn Activation> {
-    return match index {
-        0 => Box::new(LinearActivation),
-        1 => Box::new(SigmoidActivation),
-        2 => Box::new(ReLUActivation),
-        _ => Box::new(LinearActivation)
+const LINEAR: LinearActivation = LinearActivation;
+const SIGMOID: SigmoidActivation = SigmoidActivation;
+const RELU: ReLUActivation = ReLUActivation;
+
+pub fn activate(mode: usize, value: f32) -> f32 {
+    return match mode {
+        0 => LINEAR.activate(value),
+        1 => SIGMOID.activate(value),
+        2 => RELU.activate(value),
+        _ => LINEAR.activate(value)
+    }
+}
+
+pub fn derivative(mode: usize, value: f32) -> f32 {
+    return match mode {
+        0 => LINEAR.derivative(value),
+        1 => SIGMOID.derivative(value),
+        2 => RELU.derivative(value),
+        _ => LINEAR.derivative(value)
     }
 }
 

@@ -1,6 +1,6 @@
 use bincode_derive::{Decode, Encode};
 use rand::{self, distributions::{Distribution, Uniform}};
-use crate::activation::activations;
+use crate::activation::{activate};
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub struct Neuron {
@@ -44,6 +44,6 @@ impl Neuron {
         value += self.bias;
 
         self.value = value;
-        self.result = activations(self.activation).activate(value);
+        self.result = activate(self.activation, value);
     }
 }
