@@ -24,6 +24,7 @@ outputs:
 mod alphanum_3x5_test {
     use rand::{Rng, thread_rng};
     use crate::network::{load_network, Network, save_network};
+    use crate::neuron::Neuron;
 
     const PATH: &str = "C:/Users/ACER/RustroverProjects/fksainetwork/networks/alphanum_3x5_test.ai";
 

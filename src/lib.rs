@@ -15,7 +15,8 @@ mod util;
 * - ReLU (2) [max(0, value)] [if value <= 0.0 ? 0.0 : 1.0]
 *
 * The current methods of learning are as follows:
-* - Mean Squared Error (MSE) using Back Propogation (BPG)
+* - Mean Squared Error (MSE) using Back Propogation (BPG)   ***learn_mse_bpg***
+*
 *		    Equation of the output bias gradient (dE/db) is the error term of the output using the error function (E)
 *
 *		    εk = Σ [ (ak - tk) * (gk'(zk)) ] where
@@ -62,19 +63,6 @@ mod util;
 *		    εi = [ gj'(zi) ][ Σ (εj * wij) ];
 *		    εh = [ gj'(zh) ][ Σ (εi * whi) ];
 *		    and so on.
-*
-* The Network is saved using the following serialization format:
-*
-*		    [number of layers] [number of neurons of layer 0] [number of neurons of layer 1] [number of neurons of layer n]
-*		    [activation of layer 0] [activation of layer 1] [activation of layer n]
-*		    [bias of neuron 0] [weight 0 of neuron 0] [weight 1 of neuron 0] [weight n of neuron 0] //begins on the first hidden layer
-*		    [bias of neuron 1] [weight 0 of neuron 1] [weight 1 of neuron 1] [weight n of neuron 1]
-*		    ...
-*		    [bias of neuron n] [weight 0 of neuron n] [weight 1 of neuron n] [weight n of neuron n]
-*
-*		    Neurons are then put accordingly to its index to its respective layer.
-*		    The first neurons are put in the first hidden layer, then the following
-*		    is put in the next layer, and so on.
 */
 pub mod network {
     use std::fmt::Formatter;
@@ -284,6 +272,9 @@ pub mod network {
         }
     }
 
+    /**
+     * Loads the network from the given path.
+     */
     pub fn load_network(path: String) -> Network {
         let data = std::fs::read(path).expect("Unable to read file");
         let (network, _len): (Network, usize) =
@@ -291,6 +282,9 @@ pub mod network {
         network
     }
 
+    /**
+    * Saves the network to the given path in binary format using bincode.
+    */
     pub fn save_network(path: String, network: &Network) {
         let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
         let mut file = File::create(path).unwrap();
