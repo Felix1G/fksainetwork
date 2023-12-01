@@ -4,77 +4,64 @@ mod tests;
 mod util;
 
 /**
-* -- Documentation --
-*
-* This Neural Network is coded and created by Felix K.S
-* (used to be in C++, ported to Rust)
-*
-* The current activation functions are as follows: (index) [function] [derivative function]
-* - Linear (0) [value] [1.0]
-* - Sigmoid (1) [value / (1 + e^(-value))] [f(value) * (1.0 - f(value))]
-* - ReLU (2) [max(0, value)] [if value <= 0.0 ? 0.0 : 1.0]
-*
-* The current methods of learning are as follows:
-* - Mean Squared Error (MSE) using Back Propogation (BPG)
-*		    Equation of the output bias gradient (dE/db) is the error term of the output using the error function (E)
-*
-*		    εk = Σ [ (ak - tk) * (gk'(zk)) ] where
-*		    tk = expected value of the output neuron;
-*		    ak = gk(zk) = Neuron::result;
-*		    gk = Activation::activate
-*		    gk` = Activation::activate_derivative;
-*		    zk = Neuron::value;
-*
-*
-*		    Equation of the output weight gradient is the error term multipled with
-*		    the previous neuron result associated with that weight (dE/dwj)
-*
-*		    dE/dwj = εk * aj where
-*		    εk = the error term of the output neuron;
-*		    wj = the weight of which its gradient is to be calculated;
-*		    aj = the result of the previous neuron associated with wj;
-*
-*		    ------------------
-*
-*		    Equation of the hidden layer bias is the utilization of a recursion where
-*		    all neurons that are connected with this hidden neuron are taken onto account
-*		    during the calculation of its gradient. (dE/dbj)
-*
-*		    An error term of j is then created.
-*
-*		    εj = [ gj'(zj) ][ Σ (εk * wjk) ] where
-*		    gj' = Activation::activate_derivative;
-*		    zj = Neuron::value;
-*		    εk = error term of the output neuron;
-*		    wjk = the weight of the next neuron associated with this hidden neuron;
-*
-*		    Hence, the weight gradient can be calculated using the same way as above. (dE/dwij)
-*
-*		    dE/dwij = εj * ai where
-*		    wij = the weight of which its gradient is to be calculated;
-*		    ai = the result of the previous neuron;
-*		    εj = the error term of this hidden layer;
-*
-*		    ------------------
-*
-*		    For deeper neural networks, the error term is then plugged in by recursion.
-*		    εj = [ gj'(zj) ][ Σ (εk * wjk) ];
-*		    εi = [ gj'(zi) ][ Σ (εj * wij) ];
-*		    εh = [ gj'(zh) ][ Σ (εi * whi) ];
-*		    and so on.
-*
-* The Network is saved using the following serialization format:
-*
-*		    [number of layers] [number of neurons of layer 0] [number of neurons of layer 1] [number of neurons of layer n]
-*		    [activation of layer 0] [activation of layer 1] [activation of layer n]
-*		    [bias of neuron 0] [weight 0 of neuron 0] [weight 1 of neuron 0] [weight n of neuron 0] //begins on the first hidden layer
-*		    [bias of neuron 1] [weight 0 of neuron 1] [weight 1 of neuron 1] [weight n of neuron 1]
-*		    ...
-*		    [bias of neuron n] [weight 0 of neuron n] [weight 1 of neuron n] [weight n of neuron n]
-*
-*		    Neurons are then put accordingly to its index to its respective layer.
-*		    The first neurons are put in the first hidden layer, then the following
-*		    is put in the next layer, and so on.
+-- Documentation --
+
+ This Neural Network is coded and created by Felix K.S
+ (used to be in C++, ported to Rust)
+
+ The current activation functions are as follows: (index) [function] [derivative function]
+ - Linear (0) [value] [1.0]
+ - Sigmoid (1) [value / (1 + e^(-value))] [f(value) * (1.0 - f(value))]
+ - ReLU (2) [max(0, value)] [if value <= 0.0 ? 0.0 : 1.0]
+
+ The current methods of learning are as follows:
+ - Mean Squared Error (MSE) using Back Propogation (BPG)   ***learn_mse_bpg***
+
+		    Equation of the output bias gradient (dE/db) is the error term of the output using the error function (E)
+
+		    εk = Σ [ (ak - tk) * (gk'(zk)) ] where
+		    tk = expected value of the output neuron;
+		    ak = gk(zk) = Neuron::result;
+		    gk = Activation::activate
+		    gk` = Activation::activate_derivative;
+		    zk = Neuron::value;
+
+
+		    Equation of the output weight gradient is the error term multipled with
+		    the previous neuron result associated with that weight (dE/dwj)
+		    dE/dwj = εk * aj where
+		    εk = the error term of the output neuron;
+		    wj = the weight of which its gradient is to be calculated;
+		    aj = the result of the previous neuron associated with wj;
+
+		    ------------------
+
+		    Equation of the hidden layer bias is the utilization of a recursion where
+		    all neurons that are connected with this hidden neuron are taken onto account
+		    during the calculation of its gradient. (dE/dbj)
+
+		    An error term of j is then created.
+
+		    εj = [ gj'(zj) ][ Σ (εk * wjk) ] where
+		    gj' = Activation::activate_derivative;
+		    zj = Neuron::value;
+		    εk = error term of the output neuron;
+		    wjk = the weight of the next neuron associated with this hidden neuron;
+
+		    Hence, the weight gradient can be calculated using the same way as above. (dE/dwij)
+
+		    dE/dwij = εj * ai where
+		    wij = the weight of which its gradient is to be calculated;
+		    ai = the result of the previous neuron;
+		    εj = the error term of this hidden layer;
+
+		    ------------------
+
+		    For deeper neural networks, the error term is then plugged in by recursion.
+		    εj = [ gj'(zj) ][ Σ (εk * wjk) ];
+		    εi = [ gj'(zi) ][ Σ (εj * wij) ];
+		    εh = [ gj'(zh) ][ Σ (εi * whi) ];
+		    and so on.
 */
 pub mod network {
     use std::fmt::Formatter;
@@ -127,6 +114,11 @@ pub mod network {
             }
         }
 
+        /**
+        Calculates the output given the input.
+
+        Returns: output.
+        */
         pub fn calculate(&mut self, input: &[f32]) -> Vec<f32> {
             //set index layer to the inputs
             let input_layer = &mut (self.layers[0]);
@@ -184,6 +176,11 @@ pub mod network {
             }
         }
 
+        /**
+        BPG learning using the MSE function.
+
+        Provide the expected values that would be returned by the calculate function.
+         */
         pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {
             let mut output_err_terms = Vec::<f32>::new();
 
@@ -284,6 +281,9 @@ pub mod network {
         }
     }
 
+    /**
+     * Loads the network from the given path.
+     */
     pub fn load_network(path: String) -> Network {
         let data = std::fs::read(path).expect("Unable to read file");
         let (network, _len): (Network, usize) =
@@ -291,6 +291,9 @@ pub mod network {
         network
     }
 
+    /**
+    * Saves the network to the given path in binary format using bincode.
+    */
     pub fn save_network(path: String, network: &Network) {
         let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
         let mut file = File::create(path).unwrap();

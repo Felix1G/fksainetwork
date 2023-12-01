@@ -24,6 +24,7 @@ outputs:
 mod alphanum_3x5_test {
     use rand::{Rng, thread_rng};
     use crate::network::{load_network, Network, save_network};
+    use crate::neuron::Neuron;
 
     const PATH: &str = "C:/Users/ACER/RustroverProjects/fksainetwork/networks/alphanum_3x5_test.ai";
 
@@ -247,13 +248,13 @@ mod alphanum_3x5_test {
             let output = network.calculate(array);
             network.learn_bpg_mse(0.001, &expected);
 
-            println!("Run: {run}");
             //println!("Output for {}: {:?}", data.0, network.calculate(array));
 
             if run % 10000 == 0 {
+                println!("Run: {run}");
                 save_network(String::from(PATH), &network);
             }
-        }
+        }*/
 
 
         //testing
@@ -261,7 +262,7 @@ mod alphanum_3x5_test {
             let array = data.1;
             let output_arr = network.calculate(&array);
             println!("{} ? {:?}", data.0, from_calculation(&output_arr));
-        }*/
+        }
 
         let output = &network.calculate(&[
             1.0, 1.0, 1.0,
