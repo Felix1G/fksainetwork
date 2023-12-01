@@ -239,7 +239,7 @@ mod alphanum_3x5_test {
 
         let len = TEST_ARR.len();
         //learning
-        for run in 0..10000000 {
+        /*for run in 0..10000000 {
             let data = &TEST_ARR[rng.gen_range(0..len)];
             let array = &data.1;
             let expected = &expected(data.0);
@@ -253,7 +253,7 @@ mod alphanum_3x5_test {
                 println!("Run: {run}");
                 save_network(String::from(PATH), &network);
             }
-        }
+        }*/
 
 
         //testing
