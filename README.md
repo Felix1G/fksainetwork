@@ -47,27 +47,28 @@ The current activation functions [ $`g(v)`$ ] are as follows:
 ---
 
 Learning involves changing the weights and biases of the neuron to an optimal value that can evaluate precise outputs.
+
+Gradient descend is used to calculate the  "right" values of the weights and biases.
+A gradient of 0 ($`m = 0`$) is what the gradients of the weights and biases should approach. <br/>
+For each neuron, an error term will be calculated which will be used later to calculate the gradient.
+
+To calculate the bias:
+$`$ b_n = b_n - α \times ε_n$`$
+$`b_n =`$ the neuron's bias.<br/>
+$`α =`$ the learning rate.<br/>
+$`ε_n =`$ the neuron's error term, also the gradient of the bias.
+
+To calculate the weight:
+$`$ w_n = w_n - α \times ε_na_{(n-1)i}$`$
+$`w_n =`$ the neuron's weight associated with $`ε_na_{(n-1)i}`$.<br/>
+$`α =`$ the learning rate.<br/>
+$`ε_n =`$ the neuron's error term, also the gradient of the bias.<br/>
+$`a_{(n-1)i} = `$ the result of the neuron of the previous layer.
+
+Error terms are different for the output layer and the hidden layers.
+
 The current methods of learning are as follows:
 - Mean Squared Error (MSE) using Back Propagation (BPG)   ***learn_bpg_mse***<br/>
-	Gradient descent is used to calculate the "right" values of the weights and biases.
-	A gradient of 0 ($`m = 0`$) is what the gradients of the weights and biases should approach. <br/>
- 	For each neuron, an error term will be calculated which will be used later to calculate the gradient.
-
-	To calculate the bias:
-	$`$ b_n = b_n - α \times ε_n$`$
-	$`b_n =`$ the neuron's bias.<br/>
-	$`α =`$ the learning rate.<br/>
-	$`ε_n =`$ the neuron's error term, also the gradient of the bias.
-
-	To calculate the weight:
-	$`$ w_n = w_n - α \times ε_na_{(n-1)i}$`$
-	$`w_n =`$ the neuron's weight associated with $`ε_na_{(n-1)i}`$.<br/>
-	$`α =`$ the learning rate.<br/>
-	$`ε_n =`$ the neuron's error term, also the gradient of the bias.<br/>
-	$`a_{(n-1)i} = `$ the result of the neuron of the previous layer.
-
-	Error terms are different for the output layer and the hidden layers.
-
 	---
   	The Output Layer
   	---
@@ -103,14 +104,14 @@ The current methods of learning are as follows:
 	
 	Hence, the weight gradient can be calculated with the same way as above.
 	$`$\frac{∂E}{∂w_{ij}} = ε_j * a_i$`$
-	wij = the weight of which its gradient is to be calculated;
-	ai = the result of the previous neuron;
-	εj = the error term of this hidden layer;
+	$`wij = `$ the weight of which its gradient is to be calculated.<br/>
+	$`ai = `$ the result of the previous neuron.<br/>
+	$`εj = `$ the error term of this hidden layer.
 	
 	------------------
 	
-	For deeper neural networks, the error term is then plugged in by recursion.
-	εj = [ gj'(zj) ][ Σ (εk * wjk) ];
-	εi = [ gj'(zi) ][ Σ (εj * wij) ];
-	εh = [ gj'(zh) ][ Σ (εi * whi) ];
-	and so on.
+	For deeper neural networks, recursion is done.
+	$`$ε_j = g'_j(z_j) \times \sum_k ε_kw_{jk}$`$
+	$`$ε_i = g'_i(z_i) \times \sum_k ε_jw_{ij}$`$
+	$`$ε_h = g'_h(z_h) \times \sum_k ε_iw_{hi}$`$
+	$`$and so on.$`$
