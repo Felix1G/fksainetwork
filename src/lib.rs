@@ -13,6 +13,7 @@ pub mod network {
 
     /**
     A simple neural network.
+    Inner workings are at GitHub: https://github.com/Felix1G/fksainetwork
      */
     #[derive(Encode, Decode, PartialEq, Debug)]
     pub struct Network {
