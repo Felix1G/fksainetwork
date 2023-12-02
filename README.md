@@ -9,7 +9,6 @@ A **neural network** capable of **learning** and calculating output.<br/>
 This project is just made for fun :)<br/>
 Read on to learn more about its inner workings.
 
-
 **<h3>Inner Workings<h3/>**
 
 The neural network is a network of artificial neurons where each neuron does some calculations and calculates
@@ -45,6 +44,9 @@ The current activation functions [ $`g(v)`$ ] are as follows:
 	1.0, & \text{if } v > 0
 	\end{cases}
 	`$
+- Tanh (index = 3)<br/>
+	$`g(v) = \frac{e^v - e^{-v}}{e^v + e^{-v}}`$<br/>
+	$`g'(v) = 1 - g(v)^2`$
 
 ---
 Learning
@@ -123,3 +125,10 @@ The current methods of learning are as follows:
 	$`$ε_i = g'_i(z_i) \times \sum_k ε_jw_{ij}$`$
 	$`$ε_h = g'_h(z_h) \times \sum_k ε_iw_{hi}$`$
 	and so on.
+
+
+---
+Update Patches :)
+---
+0.1.3: Added Tanh Activation Function.<br/>
+0.1.3: Improved Docs.
