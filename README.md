@@ -36,5 +36,5 @@ Example:
 Update Patches :)
 ---
 0.1.3: Added Tanh Activation Function.<br/>
-0.1.3: Improved Docs.
+0.1.3: Improved Docs.<br/>
 0.1.4: Separated Inner Workings from README.md.
