@@ -12,7 +12,16 @@ This project is just made for fun :)<br/>
 Please go to [Inner Working](github.com/Felix1G/fksainetwork/blob/main/INNERWORKINGS.md) to read more.
 
 ---
-Example:
+Usage
+---
+``````toml
+[dependencies]
+fksainetwork = "0.1.4"
+``````
+
+---
+Example
+---
 ``````rust
 	let layers = [2, 2]; //2 input neurons, 2 output neurons
 	let activations = [0, 1]; //linear, sigmoid
