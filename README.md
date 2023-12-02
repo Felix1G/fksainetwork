@@ -26,6 +26,8 @@ $`w_n = `$ the neuron's weight associated with $`a_{n-1}`$ <br/>
 $`a_{(n-1)i} = `$ the previous neuron's value <br/>
 
 ---
+Activation Functions
+---
 
 The current activation functions [ $`g(v)`$ ] are as follows:
 - Linear (index = 0)<br/>
@@ -44,6 +46,8 @@ The current activation functions [ $`g(v)`$ ] are as follows:
 	\end{cases}
 	`$
 
+---
+Learning
 ---
 
 Learning involves changing the weights and biases of the neuron to an optimal value that can evaluate precise outputs.
@@ -67,6 +71,10 @@ $`a_{(n-1)i} = `$ the result of the neuron of the previous layer.
 
 Error terms are different for the output layer and the hidden layers.
 
+---
+
+<h4>Methods of Learning</h4>
+
 The current methods of learning are as follows:
 - Mean Squared Error (MSE) using Back Propagation (BPG)   ***learn_bpg_mse***<br/>
 	---
@@ -88,7 +96,7 @@ The current methods of learning are as follows:
 	$`a_j = `$ the result of the previous neuron associated with $`w_j`$.
 	
 	---
-  	Hidden Layer
+  	The Hidden Layer
   	---
 	Equation of the hidden layer bias is the utilization of a recursion where
 	all neurons that are connected with this hidden neuron are taken into account
@@ -114,4 +122,4 @@ The current methods of learning are as follows:
 	$`$ε_j = g'_j(z_j) \times \sum_k ε_kw_{jk}$`$
 	$`$ε_i = g'_i(z_i) \times \sum_k ε_jw_{ij}$`$
 	$`$ε_h = g'_h(z_h) \times \sum_k ε_iw_{hi}$`$
-	$`$and so on.$`$
+	and so on.
