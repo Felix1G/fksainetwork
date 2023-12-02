@@ -1,0 +1,1 @@
+pub fn max(val0: f32, val1: f32) -> f32 { if val0 > val1 { val0 } else { val1 } }
