@@ -9,7 +9,7 @@ A **neural network** capable of **learning** and calculating output.<br/>
 This project is just made for fun :)<br/>
 
 ---
-Please go to [Inner Working](github.com/Felix1G/fksainetwork/blob/main/INNERWORKINGS.md) to read more.
+Please go to [Inner Workings](https://github.com/Felix1G/fksainetwork/blob/main/INNERWORKINGS.md) to read more.
 
 ---
 Usage
