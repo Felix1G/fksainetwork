@@ -2,7 +2,8 @@
 #[cfg(test)]
 mod image_recognition_test {
     use std::fs;
-    use crate::network::cnn::ConvolutionalNetwork;
+    use crate::network::cnn::{ConvolutionalNetwork, save_cnn_network};
+    use crate::network::save_network;
     use crate::util::Matrix;
 
     #[test]
@@ -42,5 +43,7 @@ mod image_recognition_test {
 
             //println!("{:?}", network);
         }
+
+        save_cnn_network("C:/Users/ACER/RustroverProjects/fksainetwork/networks/image_recognition.ai", &network);
     }
 }

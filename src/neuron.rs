@@ -50,7 +50,7 @@ impl Neuron {
     }
 }
 
-#[derive(Debug)]
+#[derive(Encode, Decode, PartialEq, Debug)]
 pub struct ConvolutionalLayer {
     //temporary variables act as caches
     //weights

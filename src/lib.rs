@@ -236,7 +236,7 @@ pub mod network {
     /**
      * Loads the network from the given path.
      */
-    pub fn load_network(path: String) -> Network {
+    pub fn load_network(path: &str) -> Network {
         let data = std::fs::read(path).expect("Unable to read file");
         let (network, _len): (Network, usize) =
             bincode::decode_from_slice(&data, config::standard()).unwrap();
@@ -246,18 +246,22 @@ pub mod network {
     /**
     * Saves the network to the given path in binary format using bincode.
     */
-    pub fn save_network(path: String, network: &Network) {
+    pub fn save_network(path: &str, network: &Network) {
         let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
         let mut file = File::create(path).unwrap();
         file.write_all(&data).unwrap();
     }
 
     pub mod cnn {
+        use std::fs::File;
+        use std::io::Write;
+        use bincode::config;
+        use bincode_derive::{Encode, Decode};
         use crate::network::Network;
         use crate::neuron::ConvolutionalLayer;
         use crate::util::Matrix;
 
-        #[derive(Debug)]
+        #[derive(Encode, Decode, PartialEq, Debug)]
         pub struct ConvolutionalNetwork {
             network: Network,
             network_input_arr: Vec<f32>,
@@ -410,6 +414,26 @@ pub mod network {
 
                 return self.network.calculate(&self.network_input_arr);
             }
+        }
+
+
+        /**
+         * Loads the network from the given path.
+         */
+        pub fn load_cnn_network(path: &str) -> ConvolutionalNetwork {
+            let data = std::fs::read(path).expect("Unable to read file");
+            let (network, _len): (ConvolutionalNetwork, usize) =
+                bincode::decode_from_slice(&data, config::standard()).unwrap();
+            network
+        }
+
+        /**
+         * Saves the network to the given path in binary format using bincode.
+         */
+        pub fn save_cnn_network(path: &str, network: &ConvolutionalNetwork) {
+            let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
+            let mut file = File::create(path).unwrap();
+            file.write_all(&data).unwrap();
         }
     }
 }

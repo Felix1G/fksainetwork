@@ -1,5 +1,6 @@
+use bincode_derive::{Encode, Decode};
 
-#[derive(Debug)]
+#[derive(Encode, Decode, PartialEq, Debug)]
 pub(crate) struct Matrix {
     pub(crate) w: usize,
     pub(crate) h: usize,
