@@ -46,6 +46,6 @@ Update Patches :)
 ---
 0.1.3: Added Tanh Activation Function.<br/>
 0.1.3: Improved Docs.<br/>
-0.2.0: The save_network and load_network functions now use str instead of String for the path.
-0.2.0: Improved learning algorithm.
-0.2.0: Added the Convolutional Neural Network.
+0.2.0: The save_network and load_network functions now use str instead of String for the path.<br/>
+0.2.0: Improved learning algorithm.<br/>
+0.2.0: Added the Convolutional Neural Network.<br/>
