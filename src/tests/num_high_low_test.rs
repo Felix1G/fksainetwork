@@ -20,12 +20,12 @@ mod num_high_low_test {
         let layers = [2, 3, 3, 2];
         let activations: [usize; 4] = [0, 0, 1, 3];
         let mut network = Network::new(&layers, &activations);
-        //let mut network = load_network(String::from(PATH));
+        //let mut network = load_network(PATH);
 
         let mut rng = thread_rng();
 
         //learning
-        for i in 0..10000 {
+        for i in 0..100000 {
             let mut input: [f32; 2] = [
                 rng.gen_range(-5..50) as f32, 0.0
             ];
@@ -39,7 +39,10 @@ mod num_high_low_test {
                 network.learn_bpg_mse(0.01, &expected);
             }
 
-            //println!("Run {i}");
+            if i % 10000 == 0 {
+                save_network(PATH, &network);
+                println!("Run {i}");
+            }
         }
 
         //testing

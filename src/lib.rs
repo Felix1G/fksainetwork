@@ -20,8 +20,7 @@ pub mod network {
     #[derive(Encode, Decode, PartialEq, Debug)]
     pub struct Network {
         pub(crate) layers: Vec<Vec<Neuron>>,
-        has_hidden: bool,
-        pub(super) err_terms: Vec<f32>
+        has_hidden: bool
     }
 
     impl Network {
@@ -58,8 +57,7 @@ pub mod network {
 
             Self {
                 layers: neurons,
-                has_hidden: layers.len() > 2,
-                err_terms: vec!(0.0f32; layers[1])
+                has_hidden: layers.len() > 2
             }
         }
 
@@ -102,40 +100,18 @@ pub mod network {
             output
         }
 
-        fn learn_bpg_mse_err_term(&mut self,
-                                  layer_index: usize, neuron_index: usize,
-                                  output_err_terms: &[f32]) -> f32 {
-            return if layer_index == self.layers.len() - 1 {
-                output_err_terms[neuron_index]
-            } else {
-                let neuron = &self.layers[layer_index][neuron_index];
-
-                //derived activation
-                let value = derivative(neuron.activation, neuron.value);
-
-                let next_layer_index = layer_index + 1;
-
-                //get error term
-                let mut error = 0.0;
-                for index in 0..self.layers[next_layer_index].len() {
-                    let error_term = self.learn_bpg_mse_err_term(
-                        next_layer_index,
-                        index,
-                        output_err_terms);
-                    error += error_term * self.layers[layer_index + 1][index].weights[neuron_index];
+        fn input_layer_err_term_bpg_mse(&self) -> Vec<f32> {
+            let mut err_terms = vec![];
+            let next_layer = &self.layers[1];
+            for idx in 0..self.layers[0].len() {
+                let mut error = 0.0f32;
+                for neuron in next_layer {
+                    error += neuron.weights[idx] * neuron.error_term;
                 }
-
-                value * error
+                err_terms.push(error);
             }
-        }
 
-        fn calculate_err_terms(&self, index: usize, idx: usize) -> f32 {
-            let mut error_term_total = 0.0;
-            let next_layer = &self.layers[index + 1];
-            for next_neuron in next_layer {
-                error_term_total += next_neuron.error_term * next_neuron.weights[idx];
-            }
-            return error_term_total;
+            return err_terms;
         }
 
         /**
@@ -144,8 +120,6 @@ pub mod network {
         Provide the expected values that would be returned by the calculate function.
          */
         pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {
-            self.err_terms.clear();
-
             //calculate previous layer values
             let mut out_prev_values = Vec::<f32>::new();
             {
@@ -165,18 +139,15 @@ pub mod network {
 
                 //set the error term
                 neuron.error_term = delta;
-                if !self.has_hidden {
-                    self.err_terms.push(neuron.error_term);
-                }
 
                 for index in 0..neuron.weights.len() {
                     let gradient = delta * out_prev_values[index];
 
                     //descend the gradient
-                    neuron.weights_temp[index] = neuron.weights[index] - learning_rate * gradient;
+                    neuron.weights[index] = neuron.weights[index] - learning_rate * gradient;
                 }
 
-                neuron.bias_temp = neuron.bias - learning_rate * delta;
+                neuron.bias = neuron.bias - learning_rate * delta;
 
                 index += 1;
             }
@@ -198,7 +169,7 @@ pub mod network {
 
                     //loop through the neurons of this layer
                     for idx in 0..layer.len() {
-                        let mut neuron = &mut layer[idx];
+                        let neuron = &mut layer[idx];
                         let mut error: f32 = 0.0;
                         {
                             let value = derivative(neuron.activation, neuron.value);
@@ -214,15 +185,11 @@ pub mod network {
                         }
 
                         for w_index in 0..neuron.weights.len() {
-                            neuron.weights_temp[w_index] = neuron.weights[w_index] -
+                            neuron.weights[w_index] = neuron.weights[w_index] -
                                 learning_rate * error * val_array[w_index];
                         }
 
-                        neuron.bias_temp = neuron.bias - neuron.error_term;
-
-                        if add_error_terms_to_list {
-                            self.err_terms.push(neuron.error_term);
-                        }
+                        neuron.bias = neuron.bias - neuron.error_term;
                     }
                 }
             }
@@ -231,12 +198,11 @@ pub mod network {
             for layer in &mut self.layers {
                 for neuron in layer {
                     for index in 0..neuron.weights.len() {
-                        let mut weight = neuron.weights_temp[index];
+                        let mut weight = neuron.weights[index];
                         if weight > 1_000_000.0 { weight = 0.001; }
                         neuron.weights[index] = weight;
                     }
-                    if neuron.bias_temp > 1_000_000.0 { neuron.bias_temp = 0.001; }
-                    neuron.bias = neuron.bias_temp;
+                    if neuron.bias > 1_000_000.0 { neuron.bias = 0.001; }
                 }
             }
         }
@@ -290,13 +256,16 @@ pub mod network {
         use std::io::Write;
         use bincode::config;
         use bincode_derive::{Encode, Decode};
+        use bmp::Pixel;
+        use crate::activation::derivative;
         use crate::network::Network;
         use crate::neuron::ConvolutionalLayer;
-        use crate::util::Matrix;
+        use crate::pooling::{pooling};
+        use crate::util::{Matrix, max};
 
         #[derive(Encode, Decode, PartialEq, Debug)]
         pub struct ConvolutionalNetwork {
-            network: Network,
+            pub network: Network,
             network_input_arr: Vec<f32>,
             layers: Vec<ConvolutionalLayer>,
             width: usize,
@@ -340,17 +309,14 @@ pub mod network {
 
                 //add the first layer as the layer for the inputs
                 network_layers.push(ConvolutionalLayer {
-                    kernels_temp: vec![],
-                    kernels_layers: vec![],
-                    kernels: 0,
+                    kernel_layers: vec![],
                     kernel_size: 0,
                     pooling_size: 0,
                     pooling_method: 0,
-                    bias_temp: 0.0,
-                    bias: 0.0,
-                    value: vec![],
+                    bias: vec![],
+                    values: vec![],
                     result: vec![],
-                    pooled: Vec::<Matrix>::from(
+                    pooleds: Vec::<Matrix>::from(
                         (0..input_channels).map(|_|
                             Matrix {
                                 w: input_width,
@@ -359,6 +325,7 @@ pub mod network {
                             }
                         ).collect::<Vec<_>>()
                     ),
+                    error_terms: vec![],
                     activation: 0,
                     temp_matrix: Matrix::empty(),
                     temp_pooling_arr: vec![]
@@ -420,13 +387,15 @@ pub mod network {
                            inputs.len(), self.channels);
                 }
 
+                //copy inputs to input conv layer
                 let input_layer = &mut self.layers[0];
                 for index in 0..(inputs.len()) {
                     let input_from = &inputs[index];
-                    let input_to = &mut input_layer.pooled[index];
+                    let input_to = &mut input_layer.pooleds[index];
                     input_to.copy(input_from);
                 }
 
+                //calculate every layer
                 let mut layer_index = 1;
                 let layers_len = self.layers.len();
                 while layer_index < layers_len {
@@ -436,24 +405,125 @@ pub mod network {
                     layer_index += 1;
                 }
 
+                //feed the output conv layer to the input feed forward network
                 let output_layer = &self.layers[layers_len - 1];
                 let mut index = 0usize;
-                for matrix in &output_layer.pooled {
+                for matrix in &output_layer.pooleds {
                     for value in &matrix.values {
                         self.network_input_arr[index] = *value;
                         index += 1;
                     }
                 }
 
+                //calculate network
                 return self.network.calculate(&self.network_input_arr);
             }
 
             pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {
+                //feed forward network learns
                 self.network.learn_bpg_mse(learning_rate, expected);
+                let input_layer_err_terms = self.network.input_layer_err_term_bpg_mse();
 
-                for layer in (1..self.layers.len()).rev() {
+                //the output of the convolutional section is learnt first
+                {
 
+                    let output_index = self.layers.len() - 1;
+                    let (left_layers, right_layers) =
+                        self.layers.split_at_mut(output_index);
+                    let output_layer = &mut right_layers[0];
+                    let prev_layer = &left_layers[left_layers.len() - 1];
+
+                    //the amount of offset of the previous pooled matrices for the input layer neurons
+                    let pooled_index_offset = output_layer.pooleds[0].values.len();
+
+                    //loop through all the values
+                    for kernel_layer_idx in 0..output_layer.kernel_layers.len() {
+                        let value = &output_layer.values[kernel_layer_idx];
+                        let pooled = &output_layer.pooleds[kernel_layer_idx];
+                        let kernels = &mut output_layer.kernel_layers[kernel_layer_idx];
+
+                        //loop through the matrix values
+                        let mut error = 0.0f32;
+                        let mut error_amount = 0usize;
+                        for x in 0..value.w {
+                            'y_loop: for y in 0..value.h {
+                                let pool_x = x / output_layer.pooling_size;
+                                let pool_y = y / output_layer.pooling_size;
+
+                                //max pooling can have a 0 which doesn't need to be calculated
+                                //hence, it can speed up the learning process.
+                                if output_layer.pooling_method == 0 {
+                                    let mut vec = vec![];
+                                    let x_idx = pool_x * output_layer.pooling_size;
+                                    let y_idx = pool_y * output_layer.pooling_size;
+
+                                    for y_loc in y_idx..(y_idx + output_layer.pooling_size) {
+                                        for x_loc in x_idx..(x_idx + output_layer.pooling_size) {
+                                            vec.push(value.get(x_loc, y_loc));
+                                        }
+                                    }
+
+                                    //it is not the maximum, hence the gradient is 0
+                                    if pooling(0, &vec) != value.get(x, y) {
+                                        continue 'y_loop;
+                                    }
+                                }
+
+                                //calculate error term
+                                let err_term_idx = kernel_layer_idx * pooled_index_offset + pooled.index_to_one_d(pool_x, pool_y);
+                                let err_term = input_layer_err_terms[err_term_idx];
+                                let derivative = derivative(output_layer.activation, value.get(x, y));
+
+                                error += err_term * derivative;
+                                error_amount += 1;
+                            }
+                        }
+
+                        let mut err_term = error / error_amount as f32;
+
+                        //average pooling
+                        if output_layer.pooling_method == 1 {
+                            err_term /= output_layer.pooling_size as f32 * output_layer.pooling_size as f32;
+                        }
+
+                        //get error term
+                        output_layer.error_terms[kernel_layer_idx] = err_term;
+
+                        //update bias
+                        output_layer.bias[kernel_layer_idx] -= learning_rate * err_term;
+
+                        //update kernel weights
+                        for kernel_idx in 0..kernels.len() {
+                            let input = &prev_layer.pooleds[kernel_idx];
+                            let kernel = &mut kernels[kernel_idx];
+
+                            //loop through each kernel weight
+                            for ker_x in 0..kernel.w {
+                                for ker_y in 0..kernel.h {
+                                    //get the total value connected with this weight
+                                    let mut total_value = 0.0;
+                                    for input_x in ker_x..(ker_x + kernel.w) {
+                                        for input_y in ker_y..(ker_y + kernel.h) {
+                                            total_value += input.get(input_x, input_y);
+                                        }
+                                    }
+
+                                    kernel.set(ker_x, ker_y, kernel.get(ker_x, ker_y) - learning_rate * err_term * total_value);
+                                }
+                            }
+                        }
+                    }
                 }
+
+                /*for layer_index in (1..(self.layers.len() - 1)).rev() {
+                    let layer = &self.layers[layer_index];
+                    for kernel_layer in layer.kernel_layers {
+                        for kernel_idx in 0..kernel_layer.len() {
+                            let kernel = &kernel_layer[kernel_idx];
+
+                        }
+                    }
+                }*/
             }
         }
 
@@ -474,6 +544,37 @@ pub mod network {
             let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
             let mut file = File::create(path).unwrap();
             file.write_all(&data).unwrap();
+        }
+
+        pub fn cnn_network_bmp(dir: &str, network: &ConvolutionalNetwork) {
+            let mut layer_idx = 0usize;
+            for layer in &network.layers {
+                let mut value_idx = 0usize;
+                let mut pooled_idx = 0usize;
+                for value in &layer.result {
+                    let mut img = bmp::Image::new(value.w as u32, value.h as u32);
+                    for x in 0..value.w {
+                        for y in 0..value.h {
+                            let l = max(0.0, value.get(x, y) * 255.0) as u8;
+                            img.set_pixel(x as u32, y as u32, Pixel::new(l, l, l));
+                        }
+                    }
+                    img.save(format!("{dir}\\{layer_idx}-{value_idx}val.bmp")).unwrap();
+                    value_idx += 1;
+                }
+                for pooled in &layer.pooleds {
+                    let mut img = bmp::Image::new(pooled.w as u32, pooled.h as u32);
+                    for x in 0..pooled.w {
+                        for y in 0..pooled.h {
+                            let l = (pooled.get(x, y) * 255.0) as u8;
+                            img.set_pixel(x as u32, y as u32, Pixel::new(l, l, l));
+                        }
+                    }
+                    img.save(format!("{dir}\\{layer_idx}-{pooled_idx}pol.bmp")).unwrap();
+                    pooled_idx += 1;
+                }
+                layer_idx += 1;
+            }
         }
     }
 }

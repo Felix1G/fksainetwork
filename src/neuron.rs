@@ -6,13 +6,10 @@ use crate::util::Matrix;
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub struct Neuron {
-    //temporary variables act as caches
     //weights
-    pub(crate) weights_temp: Vec<f32>,
     pub(crate) weights: Vec<f32>,
 
     //bias
-    pub(crate) bias_temp: f32,
     pub(crate) bias: f32,
 
     pub(crate) value: f32, //value of calculation
@@ -29,9 +26,7 @@ impl Neuron {
         let range = Uniform::new_inclusive(-0.005f32, 0.005f32);
 
         Neuron {
-            weights_temp: (0..weights).map(|_| 0.0).collect(),
             weights: (0..weights).map(|_| range.sample(&mut rng)).collect(),
-            bias_temp: 0.0,
             bias: range.sample(&mut rng),
             value: 0.0,
             result: 0.0,
@@ -55,26 +50,29 @@ impl Neuron {
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub struct ConvolutionalLayer {
-    //temporary variables act as caches
-    //weights
-    pub(crate) kernels_temp: Vec<Matrix>,
-    pub(crate) kernels_layers: Vec<Matrix>,
-    pub(crate) kernels: usize,
+    //kernels
+    pub(crate) kernel_layers: Vec<Vec<Matrix>>, //layers of kernels
     pub(crate) kernel_size: usize,
 
+    //pooling
     pub(crate) pooling_size: usize,
     pub(crate) pooling_method: usize,
 
     //bias
-    pub(crate) bias_temp: f32,
-    pub(crate) bias: f32,
+    pub(crate) bias: Vec<f32>,
 
-    pub(crate) value: Vec<Matrix>, //value of calculation
-    pub(crate) result: Vec<Matrix>, //value after activation
-    pub(crate) pooled: Vec<Matrix>, //value after pooling
+    //calculated values storage
+    pub(crate) values: Vec<Matrix>, //value of calculation (product + bias)
+    pub(crate) result: Vec<Matrix>, //value of values after activation
+    pub(crate) pooleds: Vec<Matrix>, //value after pooling
 
+    //error terms
+    pub(crate) error_terms: Vec<f32>, //error term
+
+    //activation
     pub(crate) activation: usize,
 
+    //cache variables
     pub(crate) temp_matrix: Matrix, //used for convolution calculations
     pub(crate) temp_pooling_arr: Vec<f32>
 }
@@ -86,36 +84,29 @@ impl ConvolutionalLayer {
                pooling_size: usize, pooling_method: usize) -> Self {
         let mut rng = rand::thread_rng();
         let range = Uniform::new_inclusive(-0.005f32, 0.005f32);
+        let kernel_range = Uniform::new_inclusive(-0.2f32, 0.2f32);
 
         let kernel_size_2 = kernel_size * kernel_size;
         let prev_input_size = input_width * input_height;
-        let final_channel_count = kernels * prev_channels;
 
         return ConvolutionalLayer {
-            kernels_temp: (0..final_channel_count).map(|_|
-                Matrix {
-                    w: kernel_size,
-                    h: kernel_size,
-                    values: vec![0.0f32; kernel_size_2],
-                }
+            kernel_layers: (0..kernels).map(|_|
+                (0..prev_channels).map(|_|
+                    Matrix {
+                        w: kernel_size,
+                        h: kernel_size,
+                        values: (0..kernel_size_2).map(|_| kernel_range.sample(&mut rng)).collect(),
+                    }
+                ).collect()
             ).collect(),
-            kernels_layers: (0..final_channel_count).map(|_|
-                Matrix {
-                    w: kernel_size,
-                    h: kernel_size,
-                    values: (0..kernel_size_2).map(|_| range.sample(&mut rng)).collect()
-                }
-            ).collect(),
-            kernels,
             kernel_size,
 
             pooling_size,
             pooling_method,
 
-            bias_temp: 0.0,
-            bias: range.sample(&mut rng),
+            bias: (0..kernels).map(|_| range.sample(&mut rng)).collect(),
 
-            value: (0..kernels).map(|_|
+            values: (0..kernels).map(|_|
                 Matrix {
                     w: input_width,
                     h: input_height,
@@ -129,13 +120,15 @@ impl ConvolutionalLayer {
                     values: vec![0.0f32; prev_input_size],
                 }
             ).collect(),
-            pooled: (0..kernels).map(|_|
+            pooleds: (0..kernels).map(|_|
                 Matrix {
                     w: input_width / pooling_size,
                     h: input_height / pooling_size,
                     values: vec![0.0f32; prev_input_size / pooling_size / pooling_size],
                 }
             ).collect(),
+
+            error_terms: vec![0f32; kernels],
 
             activation,
 
@@ -149,81 +142,85 @@ impl ConvolutionalLayer {
     }
 
     pub(crate) fn calculate(&mut self, prev_layer: &ConvolutionalLayer) {
-
         let temp = &mut self.temp_matrix;
-        let input_size = prev_layer.pooled.len();
 
         //go to each kernel channels
-        for kernel_index in 0..self.kernels {
-            let kernel_index_addition = kernel_index * input_size;
+        for kernel_layer_idx in 0..self.kernel_layers.len() {
+            let kernel_layer = &self.kernel_layers[kernel_layer_idx];
 
             //loop through inputs
-            for input_idx in 0..input_size {
+            for input_idx in 0..kernel_layer.len() {
                 //get input matrix
-                let input = &prev_layer.pooled[input_idx];
+                let input = &prev_layer.pooleds[input_idx];
 
                 //loop through the slices
                 for x in 0..(input.w - self.kernel_size) {
                     for y in 0..(input.h - self.kernel_size) {
                         //get kernel for the input layer
-                        let kernel = &self.kernels_layers[kernel_index_addition + input_idx];
+                        let kernel = &kernel_layer[input_idx];
 
                         //copy the slice data
                         for x_loc in 0..(self.kernel_size) {
                             for y_loc in 0..(self.kernel_size) {
-                                temp.values[y_loc * temp.w + x_loc] =
-                                    input.values[(y_loc + y) * input.w + (x_loc + x)];
+                                temp.set(x_loc, y_loc, input.get(x_loc + x, y_loc + y));
                             }
                         }
 
                         //calculate
                         let value = temp.convolution(kernel);
-                        let value_matrix = &mut self.value[kernel_index];
-                        value_matrix.values[y * value_matrix.w + x] = value + self.bias;
+                        let value_matrix = &mut self.values[kernel_layer_idx];
+                        value_matrix.set(x, y, value + self.bias[kernel_layer_idx]);
                     }
                 }
             }
         }
 
-        //calculate activation
-        for idx in 0..self.value.len() {
-            let value_vec = &self.value[idx];
-            let result_vec = &mut self.result[idx];
-            for index in 0..result_vec.values.len() {
-                result_vec.values[index] = activate(self.activation, value_vec.values[index]);
+        //activating
+        for idx in 0..self.result.len() {
+            let value = &self.values[idx];
+            let result = &mut self.result[idx];
+
+            for index in 0..result.values.len() {
+                result.values[index] = activate(self.activation, value.values[index]);
             }
         }
 
         //pooling
-        for idx in 0..self.result.len() {
+        for idx in 0..self.pooleds.len() {
             let result = &self.result[idx];
-            let pooled = &mut self.pooled[idx];
-
-            let result_width = result.w;
-            let result_height = result.h;
+            let pooled = &mut self.pooleds[idx];
 
             let mut x = 0usize;
             let mut y = 0usize;
-            let mut pooled_index = 0usize;
+            let mut pooled_x = 0usize;
+            let mut pooled_y = 0usize;
 
-
-            while y < result_height {
-                while x < result_width {
+            while y < result.h {
+                while x < result.w {
+                    //clear temporary array
                     self.temp_pooling_arr.clear();
 
+                    //get the values to pool
                     for x_loc in x..(x + self.pooling_size) {
                         for y_loc in y..(y + self.pooling_size) {
-                            let value = result.values[y_loc * result.w + x_loc];
+                            let value = result.get(x_loc, y_loc);
                             self.temp_pooling_arr.push(value);
                         }
                     }
 
-                    pooled.values[pooled_index] = pooling(self.pooling_method, &self.temp_pooling_arr);
+                    //pooling
+                    pooled.set(pooled_x, pooled_y, pooling(
+                        self.pooling_method, &self.temp_pooling_arr));
 
+                    //increment
                     x += self.pooling_size;
-                    pooled_index += 1;
+                    pooled_x += 1;
                 }
+                //increment
                 y += self.pooling_size;
+                pooled_y += 1;
+                x = 0;
+                pooled_x = 0;
             }
         }
     }

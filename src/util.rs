@@ -21,7 +21,7 @@ impl Matrix {
 
         for x in 0..self.w {
             for y in 0..self.h {
-                value += self.values[y * self.w + x] * other.values[y * self.w + x];
+                value += self.get(x, y) * other.get(x, y);
             }
         }
 
@@ -34,6 +34,19 @@ impl Matrix {
         for i in 0..other.values.len() {
             self.values[i] = other.values[i];
         }
+    }
+
+    pub(crate) fn get(&self, x: usize, y: usize) -> f32 {
+        self.values[self.index_to_one_d(x, y)]
+    }
+
+    pub(crate) fn set(&mut self, x: usize, y: usize, v: f32) {
+        let index = self.index_to_one_d(x, y);
+        self.values[index] = v;
+    }
+
+    pub(crate) fn index_to_one_d(&self, x: usize, y: usize) -> usize {
+        y * self.w + x
     }
 }
 
