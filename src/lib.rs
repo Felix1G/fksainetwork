@@ -2,6 +2,8 @@ mod activation;
 mod neuron;
 mod tests;
 mod util;
+mod pooling;
+
 pub mod network {
     use std::fmt::Formatter;
     use std::fs::File;
@@ -34,6 +36,8 @@ pub mod network {
                 [layer 0 activation (although not used), layer 1 activation, layer n activation]
 
         Indices are provided at the documentation of Network.
+
+        IMPORTANT NOTE: layers and activations array size MUST be the same.
         */
         pub fn new(layers: &[usize], activations: &[usize]) -> Self {
             let mut neurons = Vec::<Vec::<Neuron>>::new();
@@ -232,7 +236,7 @@ pub mod network {
     /**
      * Loads the network from the given path.
      */
-    pub fn load_network(path: String) -> Network {
+    pub fn load_network(path: &str) -> Network {
         let data = std::fs::read(path).expect("Unable to read file");
         let (network, _len): (Network, usize) =
             bincode::decode_from_slice(&data, config::standard()).unwrap();
@@ -242,9 +246,194 @@ pub mod network {
     /**
     * Saves the network to the given path in binary format using bincode.
     */
-    pub fn save_network(path: String, network: &Network) {
+    pub fn save_network(path: &str, network: &Network) {
         let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
         let mut file = File::create(path).unwrap();
         file.write_all(&data).unwrap();
+    }
+
+    pub mod cnn {
+        use std::fs::File;
+        use std::io::Write;
+        use bincode::config;
+        use bincode_derive::{Encode, Decode};
+        use crate::network::Network;
+        use crate::neuron::ConvolutionalLayer;
+        use crate::util::Matrix;
+
+        #[derive(Encode, Decode, PartialEq, Debug)]
+        pub struct ConvolutionalNetwork {
+            network: Network,
+            network_input_arr: Vec<f32>,
+            layers: Vec<ConvolutionalLayer>,
+            width: usize,
+            height: usize,
+            channels: usize
+        }
+
+        impl ConvolutionalNetwork {
+            /**
+            Creates a convolutional neural network built on top of the Feed Forward Network.
+
+            All kernel size and pool size are as a square. Specify the square's side for the size.
+
+            "convolution_layers" are layers of multiple kernels and pooling methods which are supplied in this way:
+
+                    (amount of filters, size of the filter, activation function, size of the pooling, the method of pooling)
+
+            <br/>
+
+            Do note in each layer of the kernels, the size of the kernel arrays must also be the same.
+
+            <br/>
+
+            IMPORTANT NOTE: inputs must follow the width, height, and channels specified.
+            the feed forward network input layer is calculated automatically.
+            Please only specify the hidden and output layers for the neuron layers.
+            */
+            pub fn new(convolution_layers: &[(usize, usize, usize, usize, usize)],
+                       input_width: usize, input_height: usize, input_channels: usize,
+                       neuron_layers: &[usize], layer_activations: &[usize]) -> Self {
+                let mut neurons = [0usize, neuron_layers.len() + 1];
+                let mut activations = [0usize, layer_activations.len() + 1];
+
+                //set neurons and activations
+                for idx in 1..neurons.len() {
+                    neurons[idx] = neuron_layers[idx - 1];
+                    activations[idx] = layer_activations[idx - 1];
+                }
+
+                let mut network_layers = Vec::<ConvolutionalLayer>::new();
+
+                //add the first layer as the layer for the inputs
+                network_layers.push(ConvolutionalLayer {
+                    kernels_temp: vec![],
+                    kernels_layers: vec![],
+                    kernels: 0,
+                    kernel_size: 0,
+                    pooling_size: 0,
+                    pooling_method: 0,
+                    bias_temp: 0.0,
+                    bias: 0.0,
+                    value: vec![],
+                    result: vec![],
+                    pooled: Vec::<Matrix>::from(
+                        (0..input_channels).map(|_|
+                            Matrix {
+                                w: input_width,
+                                h: input_height,
+                                values: vec![0f32; input_width * input_height]
+                            }
+                        ).collect::<Vec<_>>()
+                    ),
+                    activation: 0,
+                    temp_matrix: Matrix::empty(),
+                    temp_pooling_arr: vec![]
+                });
+
+                //calculate network input layer size
+                let mut img_width = input_width;
+                let mut img_height = input_height;
+                let mut channels = input_channels;
+                for idx in 0..convolution_layers.len() {
+                    let conv_layer = convolution_layers[idx];
+
+                    //convolution
+                    let conv_width = img_width - conv_layer.1 + 1;
+                    let conv_height = img_height - conv_layer.1 + 1;
+
+                    //add network layer
+                    network_layers.push(ConvolutionalLayer::new(
+                        channels, conv_width, conv_height,
+                        conv_layer.0, conv_layer.1,
+                        conv_layer.2, conv_layer.3, conv_layer.4
+                    ));
+
+                    //pooling
+                    img_width = conv_width / conv_layer.3;
+                    img_height = conv_height / conv_layer.3;
+
+                    //multiply the channel
+                    channels = conv_layer.0;
+                }
+                let input_layer_size = img_width * img_height * channels;
+                neurons[0] = input_layer_size;
+
+                //create feed forward network
+                let ff_network = Network::new(&neurons, &activations);
+
+                return ConvolutionalNetwork {
+                    network: ff_network,
+                    network_input_arr: vec![0.0f32; input_layer_size],
+                    layers: network_layers,
+                    width: input_width,
+                    height: input_height,
+                    channels: input_channels
+                };
+            }
+
+            /**
+            Calculates the output given the input channels.
+
+            The input array must be supplied like this: (x, y) coordinates
+
+                    [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2)]
+            <br/>
+            Returns: output.
+             */
+            pub fn calculate(&mut self, inputs: &[Matrix]) -> Vec<f32> {
+                if inputs.len() != self.channels {
+                    panic!("Inputs channels ({}) and specified channels ({}) are different!",
+                           inputs.len(), self.channels);
+                }
+
+                let input_layer = &mut self.layers[0];
+                for index in 0..(inputs.len()) {
+                    let input_from = &inputs[index];
+                    let input_to = &mut input_layer.pooled[index];
+                    input_to.copy(input_from);
+                }
+
+                let mut layer_index = 1;
+                let layers_len = self.layers.len();
+                while layer_index < layers_len {
+                    let (left, right) =
+                        &mut self.layers.split_at_mut(layer_index);
+                    right[0].calculate(&left[layer_index - 1]);
+                    layer_index += 1;
+                }
+
+                let output_layer = &self.layers[layers_len - 1];
+                let mut index = 0usize;
+                for matrix in &output_layer.pooled {
+                    for value in &matrix.values {
+                        self.network_input_arr[index] = *value;
+                        index += 1;
+                    }
+                }
+
+                return self.network.calculate(&self.network_input_arr);
+            }
+        }
+
+
+        /**
+         * Loads the network from the given path.
+         */
+        pub fn load_cnn_network(path: &str) -> ConvolutionalNetwork {
+            let data = std::fs::read(path).expect("Unable to read file");
+            let (network, _len): (ConvolutionalNetwork, usize) =
+                bincode::decode_from_slice(&data, config::standard()).unwrap();
+            network
+        }
+
+        /**
+         * Saves the network to the given path in binary format using bincode.
+         */
+        pub fn save_cnn_network(path: &str, network: &ConvolutionalNetwork) {
+            let data: Vec<u8> = bincode::encode_to_vec(network, config::standard()).unwrap();
+            let mut file = File::create(path).unwrap();
+            file.write_all(&data).unwrap();
+        }
     }
 }
