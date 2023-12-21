@@ -16,7 +16,7 @@ Usage
 ---
 ``````toml
 [dependencies]
-fksainetwork = "0.1.4"
+fksainetwork = "0.2.0"
 ``````
 
 ---
