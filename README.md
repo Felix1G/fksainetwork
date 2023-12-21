@@ -23,26 +23,29 @@ fksainetwork = "0.1.4"
 Example
 ---
 ``````rust
-	let layers = [2, 2]; //2 input neurons, 2 output neurons
-	let activations = [0, 1]; //linear, sigmoid
-	
-	let mut network = Network::new(&layers, &activations);
-	//or: let network = load_network(String::from("path/network-file"));
-	
-	//calculating
-	let input = [1.0, 1.0];
-	let output = network.calculate(&input);
-	println!("{:?}", output);
-	
-	//learning
-	let expected = [0.0, 1.0];
-	network.learn_bpg_mse(0.01, &expected);
-	
-	//save
-	save_network(String::from("path/network-file"), &network);
+let layers = [2, 2]; //2 input neurons, 2 output neurons
+let activations = [0, 1]; //linear, sigmoid
+
+let mut network = Network::new(&layers, &activations);
+//or: let network = load_network(String::from("path/network-file"));
+
+//calculating
+let input = [1.0, 1.0];
+let output = network.calculate(&input);
+println!("{:?}", output);
+
+//learning
+let expected = [0.0, 1.0];
+network.learn_bpg_mse(0.01, &expected);
+
+//save
+save_network(String::from("path/network-file"), &network);
 ``````
 ---
 Update Patches :)
 ---
 0.1.3: Added Tanh Activation Function.<br/>
 0.1.3: Improved Docs.<br/>
+0.2.0: The save_network and load_network functions now use str instead of String for the path.
+0.2.0: Improved learning algorithm.
+0.2.0: Added the Convolutional Neural Network.
