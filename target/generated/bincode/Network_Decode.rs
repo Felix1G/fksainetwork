@@ -6,7 +6,8 @@ impl :: bincode :: Decode for Network
         Ok(Self
         {
             layers : :: bincode :: Decode :: decode(decoder) ?, has_hidden :
-            :: bincode :: Decode :: decode(decoder) ?,
+            :: bincode :: Decode :: decode(decoder) ?, err_terms : :: bincode
+            :: Decode :: decode(decoder) ?,
         })
     }
 } impl < '__de > :: bincode :: BorrowDecode < '__de > for Network
@@ -19,7 +20,8 @@ impl :: bincode :: Decode for Network
         {
             layers : :: bincode :: BorrowDecode :: borrow_decode(decoder) ?,
             has_hidden : :: bincode :: BorrowDecode :: borrow_decode(decoder)
-            ?,
+            ?, err_terms : :: bincode :: BorrowDecode ::
+            borrow_decode(decoder) ?,
         })
     }
 }

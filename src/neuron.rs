@@ -18,7 +18,9 @@ pub struct Neuron {
     pub(crate) value: f32, //value of calculation
     pub(crate) result: f32, //value after activation
 
-    pub(crate) activation: usize
+    pub(crate) activation: usize,
+
+    pub(crate) error_term: f32
 }
 
 impl Neuron {
@@ -33,7 +35,8 @@ impl Neuron {
             bias: range.sample(&mut rng),
             value: 0.0,
             result: 0.0,
-            activation
+            activation,
+            error_term: 0.0
         }
     }
 

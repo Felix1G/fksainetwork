@@ -10,6 +10,7 @@ impl :: bincode :: Encode for Neuron
         :: encode(& self.bias, encoder) ? ; :: bincode :: Encode ::
         encode(& self.value, encoder) ? ; :: bincode :: Encode ::
         encode(& self.result, encoder) ? ; :: bincode :: Encode ::
-        encode(& self.activation, encoder) ? ; Ok(())
+        encode(& self.activation, encoder) ? ; :: bincode :: Encode ::
+        encode(& self.error_term, encoder) ? ; Ok(())
     }
 }

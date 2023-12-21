@@ -12,7 +12,7 @@ mod num_high_low_test {
     use rand::{Rng, thread_rng};
     use crate::network::{load_network, Network, save_network};
 
-    const PATH: &str = "C:/Users/ACER/RustroverProjects/fksainetwork/networks/num_high_low_test.ai";
+    const PATH: &str = "C:/Users/ACER/OneDrive/Documents/GitHub/fksainetwork/num_high_low_test.ai";
 
     #[test]
     fn main() {
@@ -53,6 +53,6 @@ mod num_high_low_test {
         println!("{network}");
 
         //save network
-        save_network(String::from(PATH), &network);
+        save_network(PATH, &network);
     }
 }

@@ -3,8 +3,6 @@
 mod image_recognition_test {
     use std::fs;
     use crate::network::cnn::{ConvolutionalNetwork, save_cnn_network};
-    use crate::network::save_network;
-    use crate::util::Matrix;
 
     #[test]
     fn main() {
@@ -34,7 +32,7 @@ mod image_recognition_test {
             samples.push((ans_arr, pix_arr));
         }
 
-        for sample in samples {
+        /*for sample in samples {
             println!("{:?}", network.calculate(&[Matrix {
                 w: 32,
                 h: 32,
@@ -42,8 +40,8 @@ mod image_recognition_test {
             }]));
 
             //println!("{:?}", network);
-        }
+        }*/
 
-        save_cnn_network("C:/Users/ACER/RustroverProjects/fksainetwork/networks/image_recognition.ai", &network);
+        save_cnn_network("C:\\Users\\ACER\\OneDrive\\Documents\\GitHub\\fksainetwork/networks/image_recognition.ai", &network);
     }
 }

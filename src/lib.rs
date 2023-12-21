@@ -19,8 +19,9 @@ pub mod network {
      */
     #[derive(Encode, Decode, PartialEq, Debug)]
     pub struct Network {
-        pub(crate) layers: Vec::<Vec::<Neuron>>,
+        pub(crate) layers: Vec<Vec<Neuron>>,
         has_hidden: bool,
+        pub(super) err_terms: Vec<f32>
     }
 
     impl Network {
@@ -57,7 +58,8 @@ pub mod network {
 
             Self {
                 layers: neurons,
-                has_hidden: layers.len() > 2
+                has_hidden: layers.len() > 2,
+                err_terms: vec!(0.0f32; layers[1])
             }
         }
 
@@ -127,13 +129,22 @@ pub mod network {
             }
         }
 
+        fn calculate_err_terms(&self, index: usize, idx: usize) -> f32 {
+            let mut error_term_total = 0.0;
+            let next_layer = &self.layers[index + 1];
+            for next_neuron in next_layer {
+                error_term_total += next_neuron.error_term * next_neuron.weights[idx];
+            }
+            return error_term_total;
+        }
+
         /**
         BPG learning using the MSE function.
 
         Provide the expected values that would be returned by the calculate function.
          */
         pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {
-            let mut output_err_terms = Vec::<f32>::new();
+            self.err_terms.clear();
 
             //calculate previous layer values
             let mut out_prev_values = Vec::<f32>::new();
@@ -152,8 +163,11 @@ pub mod network {
                 let derivative_value = derivative(neuron.activation, neuron.value);
                 let delta = error * derivative_value;
 
-                //add the error term
-                if self.has_hidden { output_err_terms.push(delta); }
+                //set the error term
+                neuron.error_term = delta;
+                if !self.has_hidden {
+                    self.err_terms.push(neuron.error_term);
+                }
 
                 for index in 0..neuron.weights.len() {
                     let gradient = delta * out_prev_values[index];
@@ -169,26 +183,45 @@ pub mod network {
 
             //hidden layer gradient
             if self.has_hidden {
+                //loop through layers from the end to the 2nd layer
                 for index in (1..self.layers.len() - 1).rev() {
+                    //get previous neuron results for the weight gradients
                     let mut val_array = Vec::<f32>::new();
                     for neuron in &self.layers[index - 1] {
                         val_array.push(neuron.result);
                     }
 
-                    for idx in 0..self.layers[index].len() {
+                    let (prev_layers, next_layers) = self.layers.split_at_mut(index + 1);
+                    let layer = &mut prev_layers[index];
+
+                    let add_error_terms_to_list = index == 1;
+
+                    //loop through the neurons of this layer
+                    for idx in 0..layer.len() {
+                        let mut neuron = &mut layer[idx];
                         let mut error: f32 = 0.0;
                         {
-                            error += self.learn_bpg_mse_err_term(
-                                index,
-                                idx,
-                                &output_err_terms);
-                        }
+                            let value = derivative(neuron.activation, neuron.value);
 
-                        let neuron = &mut self.layers[index][idx];
+                            //get error term
+                            let mut error_term_total = 0.0;
+                            let next_layer = &next_layers[0];
+                            for next_neuron in next_layer {
+                                error_term_total += next_neuron.error_term * next_neuron.weights[idx];
+                            }
+
+                            error += value * error_term_total;
+                        }
 
                         for w_index in 0..neuron.weights.len() {
                             neuron.weights_temp[w_index] = neuron.weights[w_index] -
                                 learning_rate * error * val_array[w_index];
+                        }
+
+                        neuron.bias_temp = neuron.bias - neuron.error_term;
+
+                        if add_error_terms_to_list {
+                            self.err_terms.push(neuron.error_term);
                         }
                     }
                 }
@@ -414,8 +447,15 @@ pub mod network {
 
                 return self.network.calculate(&self.network_input_arr);
             }
-        }
 
+            pub fn learn_bpg_mse(&mut self, learning_rate: f32, expected: &[f32]) {
+                self.network.learn_bpg_mse(learning_rate, expected);
+
+                for layer in (1..self.layers.len()).rev() {
+
+                }
+            }
+        }
 
         /**
          * Loads the network from the given path.

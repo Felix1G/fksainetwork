@@ -11,6 +11,7 @@ impl :: bincode :: Decode for Neuron
             Decode :: decode(decoder) ?, value : :: bincode :: Decode ::
             decode(decoder) ?, result : :: bincode :: Decode ::
             decode(decoder) ?, activation : :: bincode :: Decode ::
+            decode(decoder) ?, error_term : :: bincode :: Decode ::
             decode(decoder) ?,
         })
     }
@@ -29,7 +30,8 @@ impl :: bincode :: Decode for Neuron
             borrow_decode(decoder) ?, value : :: bincode :: BorrowDecode ::
             borrow_decode(decoder) ?, result : :: bincode :: BorrowDecode ::
             borrow_decode(decoder) ?, activation : :: bincode :: BorrowDecode
-            :: borrow_decode(decoder) ?,
+            :: borrow_decode(decoder) ?, error_term : :: bincode ::
+            BorrowDecode :: borrow_decode(decoder) ?,
         })
     }
 }
