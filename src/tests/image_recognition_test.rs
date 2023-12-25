@@ -1,27 +1,39 @@
-
 #[cfg(test)]
 mod image_recognition_test {
     use crate::util::Matrix;
     use std::fs;
     use crate::network::cnn::{cnn_network_bmp, ConvolutionalNetwork, load_cnn_network, save_cnn_network};
 
-    const PATH: &str = "C:\\Users\\ACER\\OneDrive\\Documents\\GitHub\\fksainetwork/networks/image_recognition.ai";
+    const PATH: &str = "./networks/image_recognition.ai";
+
+    fn most_predicted(arr: &[f32]) -> usize {
+        arr.iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(index, _)| index)
+            .unwrap()
+    }
 
     #[test]
     fn main() {
-        let mut network = ConvolutionalNetwork::new(
+        let mut network = /*ConvolutionalNetwork::new(
             &[
-                (3, 3, 2, 6, 1),
-                //(10, 5, 2, 2, 0)
+                (6, 3, 0, 2, 2, 0),
+                (15, 4, 0, 2, 2, 0)
             ],
-            32, 32, 1, &[10], &[1]
-        );
-        //load_cnn_network(PATH);
+            32, 32, 1, &[20, 10],
+            &[0, 1], &[0, 1], 1
+        );*/
+        load_cnn_network(PATH);
 
         let mut samples = Vec::<([f32; 10], [f32; 32 * 32])>::new();
-        let paths = fs::read_dir("C:/Users/ACER/RustroverProjects/fksainetwork-learns-numbers/samples").unwrap();
+        let paths = fs::read_dir("./networks/num-dataset").unwrap();
         for path in paths {
             let file = path.unwrap();
+            if file.file_type().unwrap().is_dir() {
+                continue;
+            }
+
             let img = bmp::open(file.path()).unwrap();
             let num = file.file_name().as_encoded_bytes()[0] - 48;
             let mut pix_arr = [0f32; 1024];
@@ -37,57 +49,67 @@ mod image_recognition_test {
         }
 
         if true {
-            for idx in 0..100000 {
+            for idx in 0..10000000 {
                 let index = ((idx % 10) * 50 + ((idx / 10) % 50)) % 500;
                 let sample = samples[index];
 
-                for _ in 0..20 {
+                for i in 0..20 {
                     let out = network.calculate(&[Matrix {
                         w: 32,
                         h: 32,
                         values: Vec::from(sample.1)
                     }]);
 
-                    network.learn_bpg_mse(0.1, &sample.0);
+                    network.learn(0.0001, &sample.0);
+
+                    let prediction = most_predicted(&out);
+                    if most_predicted(&sample.0) == prediction
+                        && 1.0 - out[prediction] < 0.1 {
+                        break;
+                    }
                 }
 
-                if index == 499 {
-                    save_cnn_network("C:\\Users\\ACER\\OneDrive\\Documents\\GitHub\\fksainetwork/networks/image_recognition.ai", &network);
-                    cnn_network_bmp("C:/Users/ACER/OneDrive/Pictures/conv-ai-out", &network);
-                    println!("Run: {idx}, {:?}", network.calculate(&[Matrix {
+                if idx % 50 == 49 {
+                    save_cnn_network(PATH, &network);
+                    cnn_network_bmp("./networks/num-dataset/conv-ai-out", &network);
+
+                    let ans = network.calculate(&[Matrix {
                         w: 32,
                         h: 32,
                         values: Vec::from(sample.1)
-                    }]));
+                    }]);
+
+                    let sample_expect = most_predicted(&sample.0);
+                    let prediction = most_predicted(&ans);
+
+                    println!("Run: {idx} | {} {} {:?} {:?} \n", sample_expect, prediction, sample.0, ans);
                 }
             }
         }
 
-        let sample_ = &samples[400..500];
-        for sample in sample_ {
+        let mut index = 0;
+        let mut correct = 0;
+        for sample in &samples {
             let ans = network.calculate(&[Matrix {
                 w: 32,
                 h: 32,
                 values: Vec::from(sample.1)
             }]);
-            println!("{} {} {:?} {:?} \n",
-                     sample.0
-                         .iter()
-                         .enumerate()
-                         .max_by(|(_, a), (_, b)| a.total_cmp(b))
-                         .map(|(index, _)| index)
-                         .unwrap(),
-                     ans
-                         .iter()
-                         .enumerate()
-                         .max_by(|(_, a), (_, b)| a.total_cmp(b))
-                         .map(|(index, _)| index)
-                         .unwrap(), sample.0, ans);
+
+            let sample_expect = most_predicted(&sample.0);
+            let prediction = most_predicted(&ans);
+
+            println!("{index} {} {} {:?} {:?} \n", sample_expect, prediction, sample.0, ans);
+            if sample_expect == prediction {
+                correct += 1;
+            }
+
+            index += 1;
         }
 
-        //println!("{:?}", network);
+        println!("{}", correct as f32 / samples.len() as f32);
 
-        cnn_network_bmp("C:/Users/ACER/OneDrive/Pictures/conv-ai-out", &network);
+        cnn_network_bmp("./networks/num-dataset/conv-ai-out", &network);
 
         save_cnn_network(PATH, &network);
     }
