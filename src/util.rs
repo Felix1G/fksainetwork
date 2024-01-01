@@ -8,7 +8,15 @@ pub(crate) struct Matrix {
 }
 
 impl Matrix {
-    pub(crate) fn empty() -> Self {
+    pub fn new(w: usize, h: usize) -> Self {
+        Matrix {
+            w,
+            h,
+            values: vec![0f32; w * h]
+        }
+    }
+
+    pub fn empty() -> Self {
         Matrix {
             w: 0,
             h: 0,
@@ -16,7 +24,7 @@ impl Matrix {
         }
     }
 
-    pub(crate) fn convolution(&self, other: &Matrix) -> f32 {
+    pub fn convolution(&self, other: &Matrix) -> f32 {
         let mut value = 0.0f32;
 
         for x in 0..self.w {

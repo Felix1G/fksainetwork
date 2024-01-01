@@ -6,7 +6,8 @@ pub enum Activation {
     Linear,
     Sigmoid,
     ReLU,
-    Tanh
+    Tanh,
+    LeakyReLU
 }
 
 impl Activation {
@@ -19,7 +20,8 @@ impl Activation {
                 let exp = value.exp();
                 let expm = (-value).exp();
                 (exp - expm) / (exp + expm)
-            },
+            }
+            Activation::LeakyReLU => if value > 0.0 { value } else { 0.1 * value },
         }
     }
 
@@ -40,6 +42,13 @@ impl Activation {
             Activation::Tanh => {
                 let result = self.activate(value);
                 1.0 - result * result
+            },
+            Activation::LeakyReLU => {
+                if value <= 0.0 {
+                    0.1
+                } else {
+                    1.0
+                }
             },
         }
     }
