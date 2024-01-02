@@ -69,7 +69,7 @@ pub mod network {
                 }
                 neurons.push(input_layer);
                 normalize.push(false);
-                normalize_data.push((1.0f32, 0.0f32));
+                normalize_data.push((1f32, 0f32));
             }
 
             let length = layers.len();
@@ -108,14 +108,14 @@ pub mod network {
 
         Returns: output.
         */
-        pub fn calculate(&mut self, input: &[f32]) -> Vec<f32> {
+        pub fn calculate(&mut self, network_inputs: &[f32]) -> Vec<f32> {
             //set index layer to the inputs
             let input_layer = &mut (self.layers[0]);
             for idx in 0..input_layer.len() {
                 let neuron = &mut input_layer[idx];
-                neuron.raw = input[idx];
-                neuron.value = input[idx];
-                neuron.result = input[idx];
+                neuron.raw = network_inputs[idx];
+                neuron.value = network_inputs[idx];
+                neuron.result = network_inputs[idx];
             }
 
             //begin calculation
@@ -128,6 +128,7 @@ pub mod network {
                     }
                 }
 
+                //normalization data
                 let normalize = self.normalize[index];
                 let normalize_data = &self.normalize_data[index];
 
@@ -150,6 +151,7 @@ pub mod network {
                     }
                 }
 
+                //do batch normalization
                 if normalize {
                     let length_inv = 1f32 / self.layers[index].len() as f32;
 
@@ -181,6 +183,7 @@ pub mod network {
                 }
             }
 
+            //put output
             let mut output = Vec::<f32>::new();
             for neuron in &self.layers[self.layers.len() - 1] {
                 output.push(neuron.result);
@@ -224,7 +227,6 @@ pub mod network {
                 //add the errors related to this layer's neuron
                 for neuron in next_layer {
                     error += neuron.weights[idx] * neuron.error_term;
-                    //println!("{} {}", neuron.weights[idx], neuron.error_term)
                 }
 
                 //add the error
@@ -236,8 +238,9 @@ pub mod network {
 
         //after gradient calculation from learning, updates of weights and biases are done here
         pub(crate) fn update_weight_and_bias(&mut self, inputs_len: usize, learning_rate: f32) {
-            //update weights and biases
             let inputs_len_inv = 1.0f32 / inputs_len as f32;
+
+            //update weights and biases
             for layer_idx in 1..self.layers.len() {
                 let layer = &mut self.layers[layer_idx];
                 let normalize = self.normalize[layer_idx];
@@ -313,27 +316,27 @@ pub mod network {
                     let mut total_delta = 0f32;
                     let mut total_delta_with_norm_val = 0f32;
 
-                    let mut index = 0;
-                    let length = self.layers.len();
-                    let layer = &mut self.layers[length - 1];
-                    let normalize = self.normalize[length - 1];
-                    let normalize_data = &mut self.normalize_data[length - 1];
-                    let normalize_grad = &mut self.normalize_grad[length - 1];
-                    let std_inv_length_inv = self.std_inv_length_inv[length - 1];
+                    let layer_amount = self.layers.len();
+                    let layer = &mut self.layers[layer_amount - 1];
+                    let normalize = self.normalize[layer_amount - 1];
+                    let normalize_data = &mut self.normalize_data[layer_amount - 1];
+                    let normalize_grad = &mut self.normalize_grad[layer_amount - 1];
+                    let std_inv_length_inv = self.std_inv_length_inv[layer_amount - 1];
 
                     let layer_len = layer.len();
 
+                    //calculate delta values
                     for neuron_idx in 0..layer_len {
                         let neuron = &mut layer[neuron_idx];
 
                         //use the results of the output regardless of whether or not softmax is used
-                        let result = self.output[index];
-                        let error = self.loss_func.loss_derivative(result, index, expected);
+                        let result = self.output[neuron_idx];
+                        let error = self.loss_func.loss_derivative(result, neuron_idx, expected);
 
                         let derivative_value = neuron.activation.derivative(neuron.value);
                         let mut delta = error * derivative_value;
 
-                        //softmax is part of learning
+                        //derivative of the softmax
                         if self.use_softmax {
                             let mut softmax_derivative = 0f32;
                             for output_idx in 0..self.output.len() {
@@ -347,27 +350,27 @@ pub mod network {
                             delta *= softmax_derivative;
                         }
 
+                        //save the delta values
                         delta_vec.push(delta);
                         total_delta += delta;
                         total_delta_with_norm_val += delta * neuron.raw;
                     }
 
+                    //utilize delta values
                     for neuron_idx in 0..layer_len {
                         let neuron = &mut layer[neuron_idx];
                         let mut error = delta_vec[neuron_idx];
 
+                        //batch normalization derivative
                         if normalize {
                             normalize_grad.1 += error;
                             normalize_grad.0 += error * neuron.raw;
 
-                            let normal_grad = error * normalize_data.0;
-                            let total_delta_val = total_delta * normalize_data.0;
-
-                            error =
-                                (layer_len as f32 * normal_grad -
-                                    total_delta_val -
+                            error = normalize_data.0 *
+                                (layer_len as f32 * error -
+                                    total_delta -
                                     neuron.raw * total_delta_with_norm_val) *
-                                    std_inv_length_inv;
+                                std_inv_length_inv;
                         }
                         neuron.bias_grad += error;
 
@@ -380,22 +383,18 @@ pub mod network {
 
                         //set the error term
                         neuron.error_term = error;
-
-                        index += 1;
-                    }
-
-                    if normalize {
-                        normalize_data.0 -= learning_rate * normalize_grad.0;
-                        normalize_data.1 -= learning_rate * normalize_grad.1;
                     }
                 }
 
                 //hidden layer gradient
                 if self.has_hidden {
-                    let mut delta_vec = vec![0f32; 0];
+                    let mut delta_vec = vec![];
 
                     //loop through layers from the end to the 2nd layer
                     for index in (1..self.layers.len() - 1).rev() {
+                        let mut total_delta = 0f32;
+                        let mut total_delta_with_norm_val = 0f32;
+
                         //get previous neuron results for the weight gradients
                         let mut val_array = Vec::<f32>::new();
                         for neuron in &self.layers[index - 1] {
@@ -409,9 +408,7 @@ pub mod network {
                         let normalize_grad = &mut self.normalize_grad[index];
                         let std_inv_length_inv = self.std_inv_length_inv[index];
 
-                        let mut total_delta = 0f32;
-                        let mut total_delta_with_norm_val = 0f32;
-
+                        //calculate delta values
                         for neuron in &mut *layer {
                             let delta = neuron.activation.derivative(neuron.value);
                             delta_vec.push(delta);
@@ -426,22 +423,6 @@ pub mod network {
                             let delta = delta_vec[idx];
                             let mut error: f32 = 0.0;
                             {
-                                let mut error_delta = 0f32;
-
-                                if normalize {
-                                    normalize_grad.1 += delta;
-                                    normalize_grad.0 += delta * neuron.raw;
-
-                                    let normal_grad = delta * normalize_data.0;
-                                    let total_delta_val = total_delta * normalize_data.0;
-
-                                    error_delta =
-                                        (layer_len as f32 * normal_grad -
-                                            total_delta_val -
-                                            neuron.raw * total_delta_with_norm_val) *
-                                            std_inv_length_inv;
-                                }
-
                                 //get error term
                                 let mut error_term_total = 0.0;
                                 let next_layer = &next_layers[0];
@@ -450,6 +431,18 @@ pub mod network {
                                 }
 
                                 error += delta * error_term_total;
+                            }
+
+                            //batch normalization derivative
+                            if normalize {
+                                normalize_grad.1 += error;
+                                normalize_grad.0 += error * neuron.raw;
+
+                                error = normalize_data.0 *
+                                    (layer_len as f32 * error -
+                                        total_delta -
+                                        neuron.raw * total_delta_with_norm_val) *
+                                    std_inv_length_inv;
                             }
 
                             //set the error term
@@ -462,17 +455,12 @@ pub mod network {
                             neuron.bias_grad += error;
                         }
 
-
-                        if normalize {
-                            normalize_data.0 -= learning_rate * normalize_grad.0;
-                            normalize_data.1 -= learning_rate * normalize_grad.1;
-                        }
-
                         delta_vec.clear();
                     }
                 }
             }
 
+            //update the gradients if specified
             if update_gradients {
                 self.update_weight_and_bias(inputs_len, learning_rate);
             }

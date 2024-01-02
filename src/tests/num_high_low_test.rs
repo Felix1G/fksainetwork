@@ -21,9 +21,9 @@ mod num_high_low_test {
     fn main() {
         //create or read the a neural network
         let mut network = Network::new(3, &[
-            (10, Initialization::Xavier, Activation::Sigmoid, true),
             (10, Initialization::Xavier, Activation::LeakyReLU, true),
-            (3, Initialization::Xavier, Activation::Linear, true)
+            (10, Initialization::Xavier, Activation::LeakyReLU, false),
+            (3, Initialization::Xavier, Activation::LeakyReLU, true)
         ], Loss::BinaryCrossEntropy, true);
         //let mut network = load_network(PATH);
 
@@ -36,9 +36,9 @@ mod num_high_low_test {
 
             for _ in 0..3 {
                 let mut input: [f32; 3] = [
-                    rng.gen_range(50..500) as f32,
-                    rng.gen_range(50..500) as f32,
-                    rng.gen_range(50..500) as f32
+                    rng.gen_range(-50..50) as f32,
+                    rng.gen_range(-50..50) as f32,
+                    rng.gen_range(-50..50) as f32
                 ];
 
                 let more0 = input[0] > input[1] && input[0] > input[2];
@@ -51,7 +51,7 @@ mod num_high_low_test {
                 expecteds.push(Vec::from(expected));
             }
 
-            network.learn(0.0001, &inputs, &expecteds, true);
+            network.learn(0.01, &inputs, &expecteds, true);
 
             if i % 100000 == 0 {
                 save_network(PATH, &network);
@@ -64,9 +64,9 @@ mod num_high_low_test {
         //testing
         for _ in 0..1000 {
             let input: [f32; 3] = [
-                rng.gen_range(50..550) as f32,
-                rng.gen_range(50..550) as f32,
-                rng.gen_range(50..550) as f32
+                rng.gen_range(-50..50) as f32,
+                rng.gen_range(-50..50) as f32,
+                rng.gen_range(-50..50) as f32
             ];
             let output = network.calculate(&input);
             println!("{:?} {:?}", input, output);
