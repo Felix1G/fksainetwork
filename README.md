@@ -23,31 +23,66 @@ fksainetwork = "0.2.0"
 Example (Feed Forward)
 ---
 ``````rust
-let layers = [2, 2]; //2 input neurons, 2 output neurons
-let initializations = [Initialization::He]; //He initialization
-let activations = [Activation::Sigmoid]; //sigmoid for the 2nd layer as input layers don't need an activation
-
-let mut network = Network::new(&layers, &initializations, &activations, Loss::BinaryCrossEntropy);
+let mut network = Network::new(2, &[ //2 neuron inputs
+            (10, Initialization::He, Activation::Sigmoid, false), //10 hidden neurons
+            (2, Initialization::Xavier, Activation::LeakyReLU, true) //2 neuron outputs, true: batch normalisation
+        ], Loss::BinaryCrossEntropy, true);
 //or: let network = load_network("path/to/network-file");
 
 //calculating
-let input = [1.0, 1.0];
-let output = network.calculate(&input);
+let input = vec![1.0, 1.0];
+let output = network.calculate(&input); //calculate
 println!("{:?}", output);
 
 //learning
-let expected = [0.0, 1.0];
-network.learn(0.01, &expected);
+//batch size of 2
+network.learn(0.01,
+  &vec![vec![0.0, 1.0], vec![0.0, 3.0]], //input values, batch size of 2
+  &vec![vec![1.0, 0.0], vec![0.0, 1.0]] //expected values
+);
+
+//NOTE: if you call 'learn', u do not need to call 'calculate' beforehand
 
 //save
-save_network(String::from("path/network-file"), &network);
+save_network("path/network-file", &network);
 ``````
 
 ---
 Example (Convolutional)
 ---
 ``````rust
-//to be continued
+let network = ConvolutionalNetwork::new(
+            //convolution layers
+            &[
+                (2, &[Initialization::Xavier;20], Activation::ReLU, 2, Pooling::Max), //20 channels, kernel 2x2, pooling max 2.0
+                (3, &[Initialization::Xavier;40], Activation::ReLU, 2, Pooling::Max) //40 channels, kernel 3x3, pooling max 2.0
+            ],
+            13, 13, 1, //input size of w: 13, h: 13, channels: 1
+            //input similar to the Feed Forward Network
+            &[
+                (3, Initialization::Xavier, Activation::LeakyReLU, false)
+            ],
+            Loss::BinaryCrossEntropy, true
+        );
+//or: let network = load_cnn_network("path/to/network-file");
+
+//pretend these samples are actual images of something
+let sample0 = Matrix::new(13, 13);
+let sample1 = Matrix::new(13, 13);
+let sample2 = Matrix::new(13, 13);
+
+//calculate
+let output = network.calculate(&vec![&sample0, &sample1, &sample2]);
+println!("{:?}", output);
+
+//learn
+network.learn(0.04, &vec![&sample0, &sample1, &sample2], &vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
+
+//print outputs
+cnn_network_bmp("path/to/directory", &network);
+
+//save network
+save_cnn_network("path/to/network-file", &network);
 ``````
 
 ---
