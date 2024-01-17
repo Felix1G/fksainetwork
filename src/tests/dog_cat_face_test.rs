@@ -148,7 +148,7 @@ mod image_recognition_test {
                 if (cur_error < prev_err) {
                     prev_err = cur_error;
                 } else {
-                    //break;
+                    break;
                     chance -= 1;
                     if (chance == 0) {
                         learning_rate *= 0.1;
