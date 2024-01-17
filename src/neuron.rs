@@ -55,13 +55,13 @@ pub struct ConvolutionalLayer {
     pub(crate) pooling_method: Pooling,
 
     //bias
-    pub(crate) bias: Vec<f32>,
+    pub(crate) bias: Vec<Matrix>,
 
     //calculated values storage
-    pub(crate) values: Vec<Matrix>, //value of calculation (product + bias)
+    pub(crate) raws: Vec<Matrix>, //value of calculation (product + bias)
+    pub(crate) values: Vec<Matrix>, //value after batch normalization if applicable
     pub(crate) results: Vec<Matrix>, //value of values after activation
-    pub(crate) pooleds_raw: Vec<Matrix>, //value after pooling
-    pub(crate) pooleds: Vec<Matrix>, //pooling value after normalization if applicable
+    pub(crate) pooleds: Vec<Matrix>, //pooling value after activation
     pub(crate) switch: Vec<Matrix>, //used for the convolution derivation
 
     //value of values after the activation derivative multiplied by switch,
@@ -69,10 +69,12 @@ pub struct ConvolutionalLayer {
     //this is calculated during learning
     pub(crate) learning_val: Vec<Matrix>,
     pub(crate) kernel_grad: Vec<Vec<Matrix>>,
-    pub(crate) bias_grad: Vec<f32>,
+    pub(crate) bias_grad: Vec<Matrix>,
+
+    pub(crate) std_inv_length_inv: Vec<f32>,
 
     //error terms
-    pub(crate) error_terms: Vec<f32>, //error term
+    pub(crate) error_terms: Vec<Matrix>, //error term
 
     //activation
     pub(crate) activation: Activation,
@@ -99,17 +101,19 @@ impl ConvolutionalLayer {
 
         let mut kernel_layers_temp: Vec<Vec<Matrix>> = Vec::<Vec<Matrix>>::with_capacity(filter_amount);
 
-        let kernel_layers: Vec<Vec<Matrix>> = (0..filter_amount).map(|_| {
+        let kernel_layers: Vec<Vec<Matrix>> = (0..filter_amount).map(|idx| {
             //create the vector for the temp layers
             let mut vec_temp = Vec::<Matrix>::with_capacity(prev_channels);
 
+            let initialization = &kernel_inits[idx];
+
             //create the actual vector
-            let vec: Vec<Matrix> = (0..prev_channels).map(| idx | {
+            let vec: Vec<Matrix> = (0..prev_channels).map(|_| {
                 //the kernel matrix
                 let matrix = Matrix {
                     w: kernel_size,
                     h: kernel_size,
-                    values: kernel_inits[idx].init(&mut rng, filter_amount, kernel_size_2, kernel_size_2),
+                    values: initialization.init(&mut rng, filter_amount, kernel_size_2, kernel_size_2),
                 };
 
                 //add a clone to the cache vector
@@ -133,21 +137,20 @@ impl ConvolutionalLayer {
             pooling_size,
             pooling_method,
 
-            bias: (0..filter_amount).map(|_| rng.gen_range(-0.005f32..0.005f32)).collect(),
+            bias: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
 
+            raws: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
             values: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
             results: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
             learning_val: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
-            pooleds_raw: (0..filter_amount).map(|_|
-                Matrix::new(
-                    input_width / pooling_size,
-                    input_height / pooling_size)
-            ).collect(),
             pooleds: (0..filter_amount).map(|_|
                 Matrix::new(
                     input_width / pooling_size,
                     input_height / pooling_size)
             ).collect(),
+
+            std_inv_length_inv: vec![0f32; filter_amount],
+
             switch: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
 
             kernel_grad:  (0..filter_amount).map(|_| {
@@ -155,9 +158,9 @@ impl ConvolutionalLayer {
                     Matrix::new(kernel_size, kernel_size)
                 }).collect()
             }).collect(),
-            bias_grad: (0..filter_amount).map(|_| 0.0f32).collect(),
+            bias_grad: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
 
-            error_terms: vec![0f32; filter_amount],
+            error_terms: (0..filter_amount).map(|_| Matrix::new(input_width, input_height)).collect(),
 
             activation,
 
@@ -180,6 +183,7 @@ impl ConvolutionalLayer {
         //go to each kernel channels
         for kernel_layer_idx in 0..self.kernel_layers.len() {
             let kernel_layer = &self.kernel_layers[kernel_layer_idx];
+            let bias_mat = &self.bias[kernel_layer_idx];
 
             //loop through inputs
             for input_idx in 0..kernel_layer.len() {
@@ -201,9 +205,52 @@ impl ConvolutionalLayer {
 
                         //calculate
                         let value = temp.convolution(kernel);
-                        let value_matrix = &mut self.values[kernel_layer_idx];
-                        value_matrix.set(x, y, value + self.bias[kernel_layer_idx]);
+                        let value_mat =
+                            if self.normalize {
+                                &mut self.raws[kernel_layer_idx]
+                            } else {
+                                &mut self.values[kernel_layer_idx]
+                            };
+                        value_mat.set(x, y, value + bias_mat.get(x, y));
                     }
+                }
+            }
+
+            //normalize if applicable
+            if self.normalize {
+                let mut idx = 0;
+
+                for raw_mat in &mut self.raws {
+                    let len_inv = 1.0 / raw_mat.values.len() as f32;
+                    let normalize_data = self.normalize_data[idx];
+                    let value_mat = &mut self.values[idx];
+
+                    //calculate mean
+                    let mut total_value = 0f32;
+                    raw_mat.values.iter().for_each(|x| total_value += x);
+                    let mean = total_value * len_inv;
+
+                    //calculate variance
+                    let mut variance = 0f32;
+                    raw_mat.values.iter().for_each(|x| {
+                        let diff = x - mean;
+                        variance += diff * diff;
+                    });
+                    variance *= len_inv;
+
+                    //standard deviation
+                    let std_inv = 1.0 / (variance + 0.00001f32).sqrt();
+                    self.std_inv_length_inv[idx] = std_inv * len_inv;
+
+                    //set value
+                    for index in 0..raw_mat.values.len() {
+                        let raw = raw_mat.values[index];
+                        let value = (raw - mean) * std_inv;
+                        raw_mat.values[index] = value;
+                        value_mat.values[index] = normalize_data.0 * value + normalize_data.1;
+                    }
+
+                    idx += 1;
                 }
             }
         }
@@ -221,11 +268,8 @@ impl ConvolutionalLayer {
         //pooling
         for idx in 0..self.pooleds.len() {
             let result = &self.results[idx];
-            let pooled_raw = &mut self.pooleds_raw[idx];
             let pooled = &mut self.pooleds[idx];
             let switch = &mut self.switch[idx];
-
-            let normalize_data = &self.normalize_data[idx];
 
             let mut x = 0usize;
             let mut y = 0usize;
@@ -247,11 +291,7 @@ impl ConvolutionalLayer {
 
                     //pooling
                     let pooled_val = self.pooling_method.pooling(&self.temp_pooling_arr);
-                    pooled_raw.set(pooled_x, pooled_y, pooled_val);
-
-                    if !self.normalize {
-                        pooled.set(pooled_x, pooled_y, pooled_val);
-                    }
+                    pooled.set(pooled_x, pooled_y, pooled_val);
 
                     //set the switch value
                     for x_loc in x..(x + self.pooling_size) {
@@ -271,34 +311,6 @@ impl ConvolutionalLayer {
                 pooled_y += 1;
                 x = 0;
                 pooled_x = 0;
-
-                //normalize if applicable
-                if self.normalize {
-                    let len_inv = 1.0 / pooled.values.len() as f32;
-
-                    //calculate mean
-                    let mut total_value = 0f32;
-                    pooled.values.iter().for_each(|x| total_value += x);
-                    let mean = total_value * len_inv;
-
-                    //calculate variance
-                    let mut variance = 0f32;
-                    pooled.values.iter().for_each(|x| {
-                        let diff = x - mean;
-                        variance += diff * diff;
-                    });
-                    variance *= len_inv;
-
-                    //standard deviation
-                    let std_inv = 1.0 / (variance + 0.00001f32).sqrt();
-
-                    //set value
-                    for index in 0..pooled.values.len() {
-                        let raw = pooled_raw.values[index];
-                        let value = (raw - mean) * std_inv;
-                        pooled.values[index] = normalize_data.0 * value + normalize_data.1;
-                    }
-                }
             }
         }
     }

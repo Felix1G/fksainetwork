@@ -70,19 +70,20 @@ mod image_recognition_test {
 
     #[test]
     fn main() {
-        let mut network = ConvolutionalNetwork::new(
+        let mut network = /*ConvolutionalNetwork::new(
             &[
-                (3, &[Initialization::He;10], Activation::ReLU, 2, Pooling::Max, false),
-                (3, &[Initialization::He;20], Activation::ReLU, 2, Pooling::Max, true),
-                (3, &[Initialization::He;40], Activation::ReLU, 2, Pooling::Max, true)
+                (7, &[Initialization::Xavier;5], Activation::ReLU, 2, Pooling::Max, false), //48
+                (7, &[Initialization::Xavier;6], Activation::ReLU, 2, Pooling::Max, false), //21
+                (6, &[Initialization::Xavier;8], Activation::ReLU, 2, Pooling::Max, false), //8
+                (3, &[Initialization::Xavier;80], Activation::ReLU, 2, Pooling::Max, false), //3
             ],
             102, 102, 3,
             &[
-                (100, Initialization::Xavier, Activation::Tanh, false),
-                (2, Initialization::Xavier, Activation::Linear, true)],
+                //(10, Initialization::Xavier, Activation::LeakyReLU, true),
+                (2, Initialization::Xavier, Activation::LeakyReLU, false)],
             Loss::BinaryCrossEntropy, true
-        );
-        //load_cnn_network(PATH);
+        );*/
+        load_cnn_network(PATH);
 
         let mut samples = Vec::<([f32; 2], Matrix, Matrix, Matrix)>::new();
         let mut tests = Vec::<([f32; 2], Matrix, Matrix, Matrix)>::new();
@@ -91,36 +92,42 @@ mod image_recognition_test {
 
         if true {
             let mut rng = thread_rng();
+            let amount = 5;
 
-            let amount = 4;
+            samples.shuffle(&mut rng);
+            let mut input_samples = Vec::<(Vec<Vec<f32>>, Vec<Vec<&Matrix>>)>::new();
 
-            for run in 0..100000 {
-                samples.shuffle(&mut rng);
-                let mut input_samples = Vec::<Vec<Vec<&Matrix>>>::new();
-                let mut expecteds = Vec::<Vec<Vec<f32>>>::new();
+            let mut idx = 0;
+            while idx < samples.len() {
+                let mut vec = vec![];
+                let mut vec2 = vec![];
 
-                let mut idx = 0;
-                while idx < samples.len() {
-                    let mut vec = vec![];
-                    let mut vec2 = vec![];
-
-                    for i in idx..min(samples.len(), idx+amount) {
-                        vec.push(vec![&samples[i].1, &samples[i].2, &samples[i].3]);
-                        vec2.push(Vec::from(samples[i].0));
-                    }
-
-                    input_samples.push(vec);
-                    expecteds.push(vec2);
-
-                    idx += amount;
+                for i in idx..min(samples.len(), idx+amount) {
+                    vec.push(vec![&samples[i].1, &samples[i].2, &samples[i].3]);
+                    vec2.push(Vec::from(samples[i].0));
                 }
 
+                input_samples.push((vec2, vec));
+
+                idx += amount;
+            }
+
+            let mut prev_err = 10000.0;
+            let mut chance = 3;
+            let mut learning_rate = 0.01;
+            for run in 0..1000000 {
+                save_cnn_network(PATH, &network);
+                input_samples.shuffle(&mut rng);
+
                 for idx in 0..input_samples.len() {
-                    network.learn(0.0001, &input_samples[idx], &expecteds[idx]);
+                    let sample = &input_samples[idx];
+                    network.learn(learning_rate, &sample.1, &sample.0);
                     //println!("{:?}, {:?}", sample.0, &out);
                 }
 
-                save_cnn_network(PATH, &network);
+                //if (run % 5 < 4) {
+                //    continue;
+                //}
 
                 let mut train_err = 0f32;
                 let mut out: Vec<f32> = vec![];
@@ -134,14 +141,27 @@ mod image_recognition_test {
                     train_err += Loss::BinaryCrossEntropy.loss(&out, &test.0);
                 }
 
-                println!("\nEpoch: {run}, err: {}, latest out: {:?}", train_err / tests.len() as f32, out);
-                cnn_network_bmp("./networks/dog-cat-dataset/conv-ai-out", &network);
+                let cur_error = train_err / tests.len() as f32;
+                println!("\nEpoch: {run}, err: {}, latest out: {:?}", cur_error, out);
+                cnn_network_bmp("./networks/num-dataset/conv-ai-out", &network);
+
+                if (cur_error < prev_err) {
+                    prev_err = cur_error;
+                } else {
+                    //break;
+                    chance -= 1;
+                    if (chance == 0) {
+                        learning_rate *= 0.1;
+                        println!("learning rate: {learning_rate}");
+                        chance = 3;
+                    }
+                }
             }
-        }
+        };
 
         let mut index = 0;
         let mut correct = 0;
-        for sample in &samples {
+        for sample in &tests {
             let ans = network.calculate(&[&sample.1, &sample.2, &sample.3]);
 
             let sample_expect = most_predicted(&sample.0);
@@ -155,7 +175,7 @@ mod image_recognition_test {
             index += 1;
         }
 
-        println!("{}", correct as f32 / samples.len() as f32);
+        println!("{}", correct as f32 / tests.len() as f32);
 
         cnn_network_bmp("./networks/dog-cat-dataset/conv-ai-out", &network);
 

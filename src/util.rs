@@ -53,6 +53,10 @@ impl Matrix {
         self.values[index] = v;
     }
 
+    pub(crate) fn zero(&mut self) {
+        self.values.iter_mut().for_each(|m| *m = 0.0);
+    }
+
     pub(crate) fn index_to_one_d(&self, x: usize, y: usize) -> usize {
         y * self.w + x
     }

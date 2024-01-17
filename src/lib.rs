@@ -239,6 +239,7 @@ pub mod network {
         //after gradient calculation from learning, updates of weights and biases are done here
         pub(crate) fn update_weight_and_bias(&mut self, inputs_len: usize, learning_rate: f32) {
             let inputs_len_inv = 1.0f32 / inputs_len as f32;
+            let learning_const = learning_rate * inputs_len_inv;
 
             //update weights and biases
             for layer_idx in 1..self.layers.len() {
@@ -249,16 +250,16 @@ pub mod network {
 
                 for neuron in layer {
                     for index in 0..neuron.weights.len() {
-                        let gradient = neuron.weights_grad[index] * inputs_len_inv;
+                        let gradient = neuron.weights_grad[index];
                         neuron.weights_grad[index] = 0f32;
 
-                        let mut weight = neuron.weights[index] - learning_rate * gradient;
+                        let mut weight = neuron.weights[index] - learning_const * gradient;
 
                         if weight.abs() > 1_000_000.0 { weight = weight.signum() * 0.001; }
                         neuron.weights[index] = weight;
                     }
 
-                    neuron.bias -= learning_rate * neuron.bias_grad * inputs_len_inv;
+                    neuron.bias -= learning_const * neuron.bias_grad;
                     neuron.bias_grad = 0f32;
 
                     if neuron.bias.abs() > 1_000_000.0 {
@@ -267,8 +268,8 @@ pub mod network {
                 }
 
                 if normalize {
-                    normalize_data.0 -= learning_rate * normalize_grad.0 * inputs_len_inv;
-                    normalize_data.1 -= learning_rate * normalize_grad.1 * inputs_len_inv;
+                    normalize_data.0 -= learning_const * normalize_grad.0;
+                    normalize_data.1 -= learning_const * normalize_grad.1;
                     normalize_grad.0 = 0.0;
                     normalize_grad.1 = 0.0;
                 }
@@ -366,12 +367,12 @@ pub mod network {
                             normalize_grad.1 += error;
                             normalize_grad.0 += error * neuron.raw;
 
-                            error = normalize_data.0 *
-                                (layer_len as f32 * error -
+                            error = (layer_len as f32 * error * normalize_data.0 -
                                     total_delta -
                                     neuron.raw * total_delta_with_norm_val) *
                                 std_inv_length_inv;
                         }
+
                         neuron.bias_grad += error;
 
                         for index in 0..neuron.weights.len() {
@@ -438,8 +439,7 @@ pub mod network {
                                 normalize_grad.1 += error;
                                 normalize_grad.0 += error * neuron.raw;
 
-                                error = normalize_data.0 *
-                                    (layer_len as f32 * error -
+                                error = (layer_len as f32 * error * normalize_data.0 -
                                         total_delta -
                                         neuron.raw * total_delta_with_norm_val) *
                                     std_inv_length_inv;
@@ -576,13 +576,14 @@ pub mod network {
                     pooling_size: 0,
                     pooling_method: Pooling::Max,
                     bias: vec![],
+                    raws: vec![],
                     values: vec![],
                     results: vec![],
                     learning_val: vec![],
                     kernel_grad: vec![],
                     bias_grad: vec![],
+                    std_inv_length_inv: vec![],
                     switch: vec![],
-                    pooleds_raw: vec![],
                     pooleds: Vec::<Matrix>::from(
                         (0..input_channels).map(|_|
                             Matrix {
@@ -650,7 +651,7 @@ pub mod network {
             /**
             Calculates the output given the input channels.
 
-            The input array must be supplied like this: (x, y) coordinates
+            The input array may be supplied like this: (x, y) coordinates
 
                     [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2)]
             <br/>
@@ -710,10 +711,16 @@ pub mod network {
                         for value_idx in 0..layer.values.len() {
                             let value = &layer.values[value_idx];
                             let derivative = &mut layer.learning_val[value_idx];
-                            let switch = &layer.switch[value_idx];
+                            let switch_mat = &layer.switch[value_idx];
+
                             for val_idx in 0..value.values.len() {
-                                derivative.values[val_idx] = switch.values[val_idx] *
-                                    layer.activation.derivative(value.values[val_idx]);
+                                let switch = switch_mat.values[val_idx];
+                                if switch == 0.0 {
+                                    derivative.values[val_idx] = 0.0;
+                                } else {
+                                    derivative.values[val_idx] = switch *
+                                        layer.activation.derivative(value.values[val_idx]);
+                                }
                             }
                         }
                     }
@@ -725,11 +732,92 @@ pub mod network {
 
                         //calculate error terms
                         {
-                            //learn the error terms first
+                            let pool_size = output_layer.pooling_size;
+
                             for value_layer_idx in 0..output_layer.values.len() {
+                                let mut err_term_mat = &mut output_layer.error_terms[value_layer_idx];
+                                let mut derivative_mat = &output_layer.learning_val[value_layer_idx];
+                                let mut raw_mat = &output_layer.raws[value_layer_idx];
+                                let mut switch_mat = &output_layer.switch[value_layer_idx];
+                                let mut pool_mat = &output_layer.pooleds[value_layer_idx];
+                                err_term_mat.zero();
+
+                                let err_term_offset = value_layer_idx * pool_size * pool_size;
+                                let mut error_total = 0.0f32;
+                                let mut error_beta = 0.0f32;
+                                let mut error_gamma = 0.0f32;
+                                let mut error_gamma_times_raw = 0.0f32;
+
+                                for pool_x in 0..pool_mat.w {
+                                    for pool_y in 0..pool_mat.h {
+                                        let x_loc = pool_x * pool_size;
+                                        let y_loc = pool_y * pool_size;
+
+                                        let error_term_idx = err_term_offset + pool_mat.index_to_one_d(pool_x, pool_y);
+                                        let pool_err = input_layer_err_terms[error_term_idx];
+
+                                        for x in x_loc..(x_loc + pool_size) {
+                                            for y in y_loc..(y_loc + pool_size) {
+                                                let cell_err = pool_err * derivative_mat.get(x, y);
+
+                                                //if output_layer.normalize {
+                                                let err_term = pool_err * switch_mat.get(x, y);
+                                                let gamma_err = err_term * raw_mat.get(x, y);
+                                                error_beta += err_term;
+                                                error_gamma += gamma_err;
+                                                error_gamma_times_raw += gamma_err * raw_mat.get(x, y);
+                                                //}
+
+                                                //add the error
+                                                err_term_mat.set(x, y, err_term_mat.get(x, y) + cell_err);
+                                            }
+                                        }
+                                    }
+                                }
+
+
+                                if output_layer.normalize {
+                                    //err_term_mat.values.iter().for_each(|err| error_total += err);
+                                    error_total = 0.0;
+
+                                    let arr_len = raw_mat.w * raw_mat.h;
+                                    let std_inv_length_inv = output_layer.std_inv_length_inv[value_layer_idx];
+
+                                    for pool_x in 0..pool_mat.w {
+                                        for pool_y in 0..pool_mat.h {
+                                            let x_loc = pool_x * pool_size;
+                                            let y_loc = pool_y * pool_size;
+
+                                            for x in x_loc..(x_loc + pool_size) {
+                                                for y in y_loc..(y_loc + pool_size) {
+                                                    error_total += (arr_len as f32 * err_term_mat.get(x, y) -
+                                                        error_gamma -
+                                                        raw_mat.get(x, y) * error_gamma_times_raw) *
+                                                        std_inv_length_inv;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    let mut out = &mut output_layer.normalize_grad[value_layer_idx];
+                                    out.0 += error_gamma;
+                                    out.1 += error_beta;
+
+                                    error_total *= output_layer.normalize_data[value_layer_idx].0;
+                                }
+
+                                for idx in 0..err_term_mat.values.len() {
+                                    let bias_grad_mat = &mut output_layer.bias_grad[value_layer_idx];
+                                    bias_grad_mat.values[idx] += err_term_mat.values[idx];
+                                }
+                            }
+
+                            /*for value_layer_idx in 0..output_layer.values.len() {
                                 let pooled = &output_layer.pooleds[value_layer_idx];
-                                let pooled_raw = &output_layer.pooleds_raw[value_layer_idx];
+                                let raw_mat = &output_layer.raws[value_layer_idx];
                                 let derivative = &output_layer.learning_val[value_layer_idx];
+                                let normalize_data = &output_layer.normalize_data[value_layer_idx];
+                                let std_inv_length_inv = &output_layer.std_inv_length_inv[value_layer_idx];
                                 let pooled_offset = value_layer_idx * pooled.values.len();
 
                                 let mut x_loc = 0usize;
@@ -737,30 +825,46 @@ pub mod network {
                                 let mut pool_x = 0usize;
                                 let mut pool_y = 0usize;
 
-                                let mut error = 0.0f32;
+                                let mut error_total = 0.0f32;
+                                let mut err_term_total = 0.0f32;
+                                let mut err_term_total_with_norm_val = 0.0f32;
                                 let mut error_gamma = 0.0f32;
                                 let mut error_beta = 0.0f32;
+
+                                let mut total_raw_mat = Matrix::new(pooled.w, pooled.h);
+
+                                let mut err_term_mat = &output_layer.error_terms[value_layer_idx];
+
+                                for err_x in err_term_mat.w {
+                                    for err_x in err_term_mat.h {
+                                        for
+                                    }
+                                }
 
                                 while x_loc + output_layer.pooling_size <= derivative.w {
                                     while y_loc + output_layer.pooling_size <= derivative.h {
                                         let mut total_derivative = 0.0;
+                                        let mut total_raw = 0.0;
 
                                         for x in x_loc..(x_loc + output_layer.pooling_size) {
                                             for y in y_loc..(y_loc + output_layer.pooling_size) {
                                                 //add the error
                                                 total_derivative += derivative.get(x, y);
+                                                total_raw += raw_mat.get(x, y);
                                             }
                                         }
+
+                                        total_raw_mat.set(pool_x, pool_y, total_raw);
 
                                         //get error term
                                         let err_index = pooled_offset +
                                             pooled.index_to_one_d(pool_x, pool_y);
                                         let err_term = input_layer_err_terms[err_index];
-                                        error += err_term * total_derivative;
-
                                         if output_layer.normalize {
-                                            error_gamma += err_term * pooled_raw.get(pool_x, pool_y);
-                                            error_beta += err_term;
+                                            err_term_total += err_term;
+                                            err_term_total_with_norm_val += err_term * total_raw;
+                                        } else {
+                                            error_total += err_term * total_derivative;
                                         }
 
                                         y_loc += output_layer.pooling_size;
@@ -768,28 +872,56 @@ pub mod network {
                                     }
                                     x_loc += output_layer.pooling_size;
                                     pool_x += 1;
-
                                     y_loc = 0;
                                     pool_y = 0;
                                 }
 
-                                //set the error
                                 if output_layer.normalize {
-                                    let mut out = output_layer.normalize_grad[value_layer_idx];
+                                    error_total = 0f32;
+                                    x_loc = 0;
+                                    pool_x = 0;
+                                    y_loc = 0;
+                                    pool_y = 0;
+
+                                    let arr_len = raw_mat.values.len();
+                                    while x_loc + output_layer.pooling_size <= derivative.w {
+                                        while y_loc + output_layer.pooling_size <= derivative.h {
+                                            let err_index = pooled_offset +
+                                                pooled.index_to_one_d(pool_x, pool_y);
+                                            let err_term = input_layer_err_terms[err_index];
+                                            let total_raw = total_raw_mat.get(pool_x, pool_y);
+
+                                            error_gamma += err_term * total_raw;
+                                            error_beta += err_term;
+
+                                            error_total += (arr_len as f32 * err_term * normalize_data.0 -
+                                                    err_term_total -
+                                                total_raw * err_term_total_with_norm_val) *
+                                                std_inv_length_inv;
+
+                                            y_loc += output_layer.pooling_size;
+                                            pool_y += 1;
+                                        }
+                                        x_loc += output_layer.pooling_size;
+                                        pool_x += 1;
+                                        y_loc = 0;
+                                        pool_y = 0;
+                                    }
+
+                                    //set the error
+                                    let mut out = &mut output_layer.normalize_grad[value_layer_idx];
                                     out.0 += error_gamma;
                                     out.1 += error_beta;
-
-                                    error *= output_layer.normalize_data[value_layer_idx].0; //multiply with gamma
                                 }
 
-                                output_layer.error_terms[value_layer_idx] = error;
-                                output_layer.bias_grad[value_layer_idx] += error;
-                            }
+                                output_layer.error_terms[value_layer_idx] = error_total;
+                                output_layer.bias_grad[value_layer_idx] += error_total;
+                            }*/
                         }
                     }
 
                     //get the error term of the rest of the convolutional layers
-                    if self.layers.len() > 1 {
+                    if self.layers.len() > 2 {
                         //loop through all convolutional layers from the end before the output
                         for layer_index in (1..(self.layers.len() - 1)).rev() {
                             //get this and the next layer
@@ -798,18 +930,96 @@ pub mod network {
                             let next_layer = &mut right_layers[0];
                             let this_layer = &mut left_layers[left_layers.len() - 1];
 
+                            let pool_size = this_layer.pooling_size;
+
+                            let next_layer_value_matrix_temp = &next_layer.values[0];
+                            let width_of_scan = next_layer_value_matrix_temp.w;
+                            let height_of_scan = next_layer_value_matrix_temp.h;
+
+                            for value_layer_idx in 0..this_layer.values.len() {
+                                let derivative = &this_layer.learning_val[value_layer_idx];
+                                let next_err_term_mat = &mut next_layer.error_terms[value_layer_idx];
+                                let err_term_mat = &mut this_layer.error_terms[value_layer_idx];
+                                err_term_mat.zero();
+
+                                for kernel_layer_index in 0..next_layer.kernel_layers.len() {
+                                    let kernel_layer = &next_layer.kernel_layers[kernel_layer_index];
+                                    let kernel = &kernel_layer[value_layer_idx];
+
+                                    for kx in 0..kernel.w {
+                                        for ky in 0..kernel.h {
+
+                                            let kernel_val = kernel.get(kx, ky);
+
+                                            for x in 0..width_of_scan {
+                                                for y in 0..height_of_scan {
+                                                    let x_loc = kx + x * pool_size;
+                                                    let y_loc = ky + y * pool_size;
+
+                                                    let cell_err =
+                                                        next_err_term_mat.get(x, y) *
+                                                        kernel_val *
+                                                        derivative.get(x_loc, y_loc);
+
+                                                    //add the error
+                                                    err_term_mat.set(x_loc, y_loc, err_term_mat.get(x_loc, y_loc) + cell_err);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                for idx in 0..err_term_mat.values.len() {
+                                    let bias_grad_mat = &mut this_layer.bias_grad[value_layer_idx];
+                                    bias_grad_mat.values[idx] += err_term_mat.values[idx];
+                                }
+                            }
+                        }
+                    }
+
+                    //get the error term of the rest of the convolutional layers
+                    /*if self.layers.len() > 1 {
+                        //loop through all convolutional layers from the end before the output
+                        for layer_index in (1..(self.layers.len() - 1)).rev() {
+                            //get this and the next layer
+                            let (left_layers, right_layers) =
+                                self.layers.split_at_mut(layer_index + 1);
+                            let next_layer = &mut right_layers[0];
+                            let this_layer = &mut left_layers[left_layers.len() - 1];
+
+                            let normalize = this_layer.normalize;
+
                             //loop through the next layer outputs (to get the error term of the next layer)
                             for value_layer_idx in 0..this_layer.values.len() {
                                 let derivative = &this_layer.learning_val[value_layer_idx];
+
+                                //raw value of pooling before scaling and shifting
+                                let raw_mat = &this_layer.raws[value_layer_idx];
+
+                                let next_layer_value_matrix_temp = &next_layer.values[0];
+                                let width_of_scan = next_layer_value_matrix_temp.w;
+                                let height_of_scan = next_layer_value_matrix_temp.h;
 
                                 let mut err_term = 0f32;
                                 let mut err_gamma = 0.0f32;
                                 let mut err_beta = 0.0f32;
 
-                                //go through all kernels related to the pooled matrix of this layer
+                                //go through all kernels related to the pooled matrix of next layer
                                 for kernel_layer_index in 0..next_layer.kernel_layers.len() {
                                     //get kernel layers
                                     let kernel_layer = &next_layer.kernel_layers[kernel_layer_index];
+
+                                    //calculate total pooled raw for batch normalization learning
+                                    let mut total_pooled_raw = 0.0f32;
+
+                                    //standard deviation inverse for batch normalization learning
+                                    let mut std_inv_length_inv = 0.0f32;
+
+                                    if normalize {
+                                        raw_mat.values.iter().for_each(|x| total_pooled_raw += x);
+                                        std_inv_length_inv = next_layer.std_inv_length_inv[kernel_layer_index];
+                                    }
+
                                     //get kernel associated with this layer's value matrix
                                     let kernel = &kernel_layer[value_layer_idx];
 
@@ -817,6 +1027,7 @@ pub mod network {
                                     let mut total_weight = 0f32;
 
                                     //calculate the total derivative
+                                    let kernel_values_len = kernel.values.len();
                                     for kx in 0..kernel.w {
                                         for ky in 0..kernel.h {
                                             let mut total_derivative = 0.0f32;
@@ -827,15 +1038,25 @@ pub mod network {
 
                                             //total value of the value matrix of this layer related
                                             //to this kernel's weight
-                                            for x_loc in ox..(kernel.w * this_layer.pooling_size + ox) {
-                                                for y_loc in oy..(kernel.h * this_layer.pooling_size + oy) {
+                                            for x_loc in ox..(width_of_scan * this_layer.pooling_size + ox) {
+                                                for y_loc in oy..(height_of_scan * this_layer.pooling_size + oy) {
                                                     total_derivative += derivative.get(x_loc, y_loc);
                                                 }
                                             }
 
-                                            //add the error
-                                            error += total_derivative * kernel.get(kx, ky);
-                                            total_weight += kernel.get(kx, ky);
+                                            //change the error
+                                            let kernel_val = &kernel.get(kx, ky);
+                                            error += total_derivative * kernel_val;
+                                            total_weight += kernel_val;
+                                            if normalize {
+                                                total_pooled_raw += raw_mat.get(kx, ky);
+
+                                                error =
+                                                    (kernel_values_len as f32 * err_term -
+                                                        total_derivative -
+                                                        total_pooled_raw * total_derivative) *
+                                                        std_inv_length_inv;
+                                            }
                                         }
                                     }
 
@@ -844,7 +1065,7 @@ pub mod network {
 
                                     if this_layer.normalize {
                                         let mut total_raw = 0f32;
-                                        this_layer.pooleds_raw[value_layer_idx].values
+                                        this_layer.raws[value_layer_idx].values
                                             .iter().for_each(|x| total_raw += x);
 
                                         let normalize_delta = total_weight * next_layer_err_term;
@@ -867,7 +1088,7 @@ pub mod network {
                                 }
                             }
                         }
-                    }
+                    }*/
 
                     //calculate weight gradients
                     for layer_index in 1..self.layers.len() {
@@ -881,7 +1102,7 @@ pub mod network {
                             let kernels = &mut this_layer.kernel_layers[kernel_layer_idx];
                             let kernel_grads = &mut this_layer.kernel_grad[kernel_layer_idx];
                             let value = &mut this_layer.values[kernel_layer_idx];
-                            let error_term = this_layer.error_terms[kernel_layer_idx];
+                            let error_term_mat = &this_layer.error_terms[kernel_layer_idx];
 
                             //update kernel weights
                             for kernel_idx in 0..kernels.len() {
@@ -893,17 +1114,15 @@ pub mod network {
                                 for ker_x in 0..kernel.w {
                                     for ker_y in 0..kernel.h {
                                         //get the total value connected with this weight
-                                        let mut total_value = 0.0;
-                                        for input_x in ker_x..(ker_x + value.w) {
-                                            for input_y in ker_y..(ker_y + value.h) {
-                                                total_value += input.get(input_x, input_y);
+                                        let mut gradient = 0.0;
+                                        for input_x in 0..value.w {
+                                            for input_y in 0..value.h {
+                                                gradient += error_term_mat.get(input_x, input_y) *
+                                                    input.get(input_x + ker_x, input_y + ker_y);
                                             }
                                         }
 
-                                        let gradient = error_term * total_value;
-
-                                        kernel_grad.set(ker_x, ker_y, kernel_grad
-                                            .get(ker_x, ker_y) + gradient);
+                                        kernel_grad.set(ker_x, ker_y, kernel_grad.get(ker_x, ker_y) + gradient);
                                     }
                                 }
                             }
@@ -916,6 +1135,7 @@ pub mod network {
 
                 //calculate the change in weights and biases of all the convolutional layers
                 let inputs_len_inv = 1.0f32 / inputs_len as f32;
+                let learning_const = learning_rate * inputs_len_inv;
                 for layer_index in 1..self.layers.len() {
                     let layer = &mut self.layers[layer_index];
 
@@ -923,6 +1143,8 @@ pub mod network {
                     for kernel_layer_idx in 0..layer.kernel_layers.len() {
                         let kernels = &mut layer.kernel_layers[kernel_layer_idx];
                         let kernel_grads = &mut layer.kernel_grad[kernel_layer_idx];
+                        let normalize_data = &mut layer.normalize_data[kernel_layer_idx];
+                        let normalize_grad = &mut layer.normalize_grad[kernel_layer_idx];
 
                         //update kernel weights
                         for kernel_idx in 0..kernels.len() {
@@ -933,21 +1155,23 @@ pub mod network {
                             for ker_x in 0..kernel.w {
                                 for ker_y in 0..kernel.h {
                                     kernel.set(ker_x, ker_y, kernel.get(ker_x, ker_y) -
-                                        learning_rate * kernel_grad.get(ker_x, ker_y) * inputs_len_inv);
+                                        learning_const * kernel_grad.get(ker_x, ker_y));
                                     kernel_grad.set(ker_x, ker_y, 0f32);
                                 }
                             }
                         }
 
-                        layer.bias[kernel_layer_idx] -= learning_rate *
-                            layer.bias_grad[kernel_layer_idx] * inputs_len_inv;
-                        layer.bias_grad[kernel_layer_idx] = 0f32;
+                        let bias_values = &mut layer.bias[kernel_layer_idx].values;
+                        let bias_grad_values = &mut layer.bias_grad[kernel_layer_idx].values;
+
+                        for index in 0..bias_grad_values.len() {
+                            bias_values[index] -= learning_const * bias_grad_values[index];
+                            bias_grad_values[index] = 0f32;
+                        }
 
                         if layer.normalize {
-                            let normalize_data = &mut layer.normalize_data[kernel_layer_idx];
-                            let normalize_grad = &mut layer.normalize_grad[kernel_layer_idx];
-                            normalize_data.0 -= learning_rate * normalize_grad.0 * inputs_len_inv;
-                            normalize_data.1 -= learning_rate * normalize_grad.1 * inputs_len_inv;
+                            normalize_data.0 -= learning_const * normalize_grad.0;
+                            normalize_data.1 -= learning_const * normalize_grad.1;
                             normalize_grad.0 = 0f32;
                             normalize_grad.1 = 0f32;
                         }
