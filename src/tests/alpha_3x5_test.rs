@@ -231,10 +231,10 @@ mod alphanum_3x5_test {
     #[test]
     fn main() {
         //create or read the a neural network
-        //let layers = [15, 20, 20, 10];
-        //let activations: [usize; 4] = [0, 2, 2, 1];
-        //let mut network = Network::new(&layers, &activations);
-        let mut network = load_network(String::from(PATH));
+        let layers = [15, 20, 20, 10];
+        let activations: [usize; 4] = [0, 2, 2, 1];
+        let mut network = Network::new(&layers, &activations);
+        //let mut network = load_network(String::from(PATH));
 
         let mut rng = thread_rng();
 

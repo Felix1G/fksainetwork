@@ -1,37 +1,46 @@
-trait Pooling {
-    fn pooling(values: &[f32]) -> f32 { values[0] }
+use bincode_derive::{Decode, Encode};
+
+#[derive(Encode, Decode, PartialEq, Debug, Clone)]
+pub enum Pooling {
+    Max,
+    Average
 }
 
-struct MaxPooling;
-struct AveragePooling;
-
-pub fn pooling(mode: usize, values: &[f32]) -> f32 {
-    return match mode {
-        0 => MaxPooling::pooling(values),
-        1 => AveragePooling::pooling(values),
-        _ => MaxPooling::pooling(values)
-    }
-}
-
-impl Pooling for MaxPooling {
-    fn pooling(values: &[f32]) -> f32 {
-        let mut val = 0f32;
-        for value in values {
-            let v = *value;
-            if v > val {
-                val = v;
+impl Pooling {
+    pub(crate) fn pooling(&self, values: &[f32]) -> f32 {
+        return match self {
+            Pooling::Max => {
+                let mut val = 0f32;
+                for value in values {
+                    let v = *value;
+                    if v > val {
+                        val = v;
+                    }
+                }
+                val
+            }
+            Pooling::Average => {
+                let mut total = 0f32;
+                for value in values {
+                    total += value;
+                }
+                total / values.len() as f32
             }
         }
-        return val;
     }
-}
 
-impl Pooling for AveragePooling {
-    fn pooling(values: &[f32]) -> f32 {
-        let mut total = 0f32;
-        for value in values {
-            total += value;
+    pub(crate) fn pooling_switch(&self, values: &[f32], expected: f32) -> f32 {
+        return match self {
+            Pooling::Max => {
+                if self.pooling(values) == expected {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Pooling::Average => {
+                1.0 / values.len() as f32
+            }
         }
-        return total / values.len() as f32;
     }
 }
